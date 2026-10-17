@@ -60,6 +60,11 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:190px}
 .kpi b{display:block;font:800 22px Cinzel,serif;margin:2px 0}
 .note{background:var(--parch);color:var(--ink);border-radius:6px;padding:10px 12px;font-size:13px;border:1px solid #b89a5e}
 .hide{display:none}
+.rgrid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:12px;align-items:start}.rgrid .frame{margin-top:0}
+@media (max-width:900px){.rgrid{grid-template-columns:1fr}}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:end}.chips .btn2{font-size:13px}
+.bar.small input{width:72px}
+.ropts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}.ropts button{text-align:left;line-height:1.25}
 body.notrip .trip,body.notrip .tripf{display:none}
 td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .btn2{padding:3px 8px;font-size:12px}
 .route{margin:0;padding:0;list-style:none;counter-reset:s}
@@ -121,47 +126,58 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
 <section id="pRoute" class="hide">
 <div class="frame">
   <div class="bar">
-    <label>De<input id="rFrom" list="zl" style="width:220px" value="Thetford"></label>
-    <label>Para<input id="rTo" list="zl" style="width:220px" value="Caerleon"></label>
-    <button class="btn" id="rOverlay">Abrir overlay</button>
+    <label>De<input id="rFrom" list="zl" style="width:210px" value="Thetford"></label>
+    <button class="btn2" id="rSwap" title="Trocar origem e destino" style="padding:7px 10px">⇄</button>
+    <label>Para<input id="rTo" list="zl" style="width:210px" value="Caerleon"></label>
+    <div id="rQuick" class="chips"></div>
   </div>
   <datalist id="zl"></datalist>
-  <div id="rSummary" class="sub" style="margin-top:10px"></div>
+  <div id="rSummary" style="margin-top:12px"></div>
 </div>
-<div class="frame">
-  <h2>Leitura automática da zona</h2>
-  <div class="sub">Lê o nome da zona por baixo do minimapa (só vê o ecrã, não mexe no jogo) e avança a rota sozinho. Se saíres da rota, recalcula a partir de onde estás.
-    Carrega em «Ligar», escolhe a janela <b>Albion Online Client</b> e partilha.</div>
-  <div class="bar" style="margin-top:10px">
-    <button class="btn" id="ocrBtn">Ligar leitura</button>
-    <label>Área: esquerda %<input id="ocrL" type="number" step="0.5" value="81.5"></label>
-    <label>direita %<input id="ocrR" type="number" step="0.5" value="96.5"></label>
-    <label>topo %<input id="ocrT" type="number" step="0.5" value="96.2"></label>
-    <label>fundo %<input id="ocrB" type="number" step="0.5" value="99.2"></label>
-  </div>
-  <div class="bar" style="margin-top:10px">
-    <label style="flex-direction:row;align-items:center;gap:6px"><input id="useChat" type="checkbox" checked> Ler também o chat («Entrando em …»)</label>
-    <label>Chat: esquerda %<input id="chatL" type="number" step="0.5" value="1"></label>
-    <label>direita %<input id="chatR" type="number" step="0.5" value="25"></label>
-    <label>topo %<input id="chatT" type="number" step="0.5" value="68"></label>
-    <label>fundo %<input id="chatB" type="number" step="0.5" value="97"></label>
-    <label>Arrastar define<select id="dragTarget"><option value="ocr">Nome (dourado)</option><option value="chat">Chat (azul)</option></select></label>
-  </div>
-  <div class="bar" style="margin-top:10px;align-items:center">
-    <canvas id="ocrFull" width="360" height="225" title="Arrasta um retângulo à volta do nome da zona" style="background:#000;border:1px solid var(--line);border-radius:4px;max-width:100%;cursor:crosshair"></canvas>
-    <canvas id="ocrPrev" width="300" height="40" style="background:#000;border:1px solid var(--line);border-radius:4px;max-width:100%"></canvas>
-    <div id="ocrStatus" class="sub">Desligada.</div>
+<div class="rgrid">
+  <div class="frame"><h2>Caminho</h2><ol id="rList" class="route"></ol></div>
+  <div>
+    <div class="frame">
+      <h2>Navegador no jogo</h2>
+      <p class="sub" style="margin:0 0 10px">Janela pequena por cima do jogo com o minimapa e a próxima saída. Com a leitura ligada, sabe onde estás e avança sozinho.</p>
+      <button class="btn" id="rOverlay" style="width:100%">🧭 Abrir navegador</button>
+      <div class="bar" style="margin-top:12px;align-items:center">
+        <button class="btn2" id="ocrBtn">Ligar leitura</button>
+        <div id="ocrStatus" class="sub" style="flex:1;min-width:150px">Desligada.</div>
+      </div>
+      <canvas id="ocrPrev" width="300" height="40" style="margin-top:8px;width:100%;background:#000;border:1px solid var(--line);border-radius:4px"></canvas>
+      <details style="margin-top:10px">
+        <summary class="gold" style="cursor:pointer">Ajustar área de leitura</summary>
+        <p class="sub">Arrasta um retângulo na imagem à volta do nome da zona (por baixo do minimapa). Só é preciso se a leitura falhar.</p>
+        <canvas id="ocrFull" width="360" height="225" title="Arrasta um retângulo à volta do nome da zona" style="width:100%;background:#000;border:1px solid var(--line);border-radius:4px;cursor:crosshair"></canvas>
+        <div class="bar" style="margin-top:8px">
+          <label>Arrastar define<select id="dragTarget"><option value="ocr">Nome (dourado)</option><option value="chat">Chat (azul)</option></select></label>
+          <label style="flex-direction:row;align-items:center;gap:6px"><input id="useChat" type="checkbox" checked> Ler também o chat</label>
+        </div>
+        <div class="bar small" style="margin-top:8px">
+          <label>Nome esq.%<input id="ocrL" type="number" step="0.5" value="81.5"></label>
+          <label>dir.%<input id="ocrR" type="number" step="0.5" value="96.5"></label>
+          <label>topo%<input id="ocrT" type="number" step="0.5" value="96.2"></label>
+          <label>fundo%<input id="ocrB" type="number" step="0.5" value="99.2"></label>
+        </div>
+        <div class="bar small" style="margin-top:8px">
+          <label>Chat esq.%<input id="chatL" type="number" step="0.5" value="1"></label>
+          <label>dir.%<input id="chatR" type="number" step="0.5" value="25"></label>
+          <label>topo%<input id="chatT" type="number" step="0.5" value="68"></label>
+          <label>fundo%<input id="chatB" type="number" step="0.5" value="97"></label>
+        </div>
+        <details style="margin-top:10px">
+          <summary class="mut" style="cursor:pointer">Direções nas cidades (avançado)</summary>
+          <p class="sub">Nas cidades não há posições das saídas; a direção vem do mapa-mundo. Se não bater certo, escolhe aqui para que lado ficam duas saídas de uma zona.</p>
+          <div class="bar"><label>Zona<input id="cZone" list="zl" value="Thetford" style="width:200px"></label></div>
+          <div id="cRows" class="bar" style="margin-top:10px"></div>
+          <div id="cRes" class="sub" style="margin-top:8px"></div>
+        </details>
+      </details>
+    </div>
+    <div class="sub">Mapa de zonas: dados da comunidade (Albion Navigator, albionroads) e ficheiros do jogo (ao-bin-dumps). As Roads of Avalon não entram nas rotas.</div>
   </div>
 </div>
-<div class="frame"><ol id="rList" class="route"></ol></div>
-<details class="frame">
-  <summary class="gold" style="cursor:pointer;font-family:Cinzel,serif">Acertar as direções com o teu minimapa</summary>
-  <p class="sub">As direções são calculadas pelo mapa-mundo. Se não baterem certo com o teu minimapa, vai a uma zona (por exemplo Thetford), vê no minimapa para que lado fica a saída para pelo menos duas zonas vizinhas e escolhe aqui. O resto ajusta-se sozinho.</p>
-  <div class="bar"><label>Zona<input id="cZone" list="zl" value="Thetford" style="width:220px"></label></div>
-  <div id="cRows" class="bar" style="margin-top:10px"></div>
-  <div id="cRes" class="sub" style="margin-top:8px"></div>
-</details>
-<div class="sub">Mapa de zonas: dados da comunidade (Albion Navigator, albionroads). As Roads of Avalon não entram, porque mudam todos os dias.</div>
 </section>
 
 <section id="pTrades" class="hide">
@@ -435,6 +451,7 @@ $("#imp").onclick = () => { const f = document.createElement("input"); f.type = 
 const ZONES = __ZONES__;   // [nome, tipo, x, y, tier, ligações]
 const ZTYPE = { 0: "Cidade inicial", 1: "Cidade", 2: "Azul", 3: "Amarela", 4: "Vermelha", 5: "Preta", 7: "Cidade (Outlands)" };
 const COMPASS = ["E", "NE", "N", "NO", "O", "SO", "S", "SE"];
+const QUICK = ["Thetford", "Lymhurst", "Bridgewatch", "Martlock", "Fort Sterling", "Caerleon"];
 $("#zl").innerHTML = ZONES.map(z => `<option value="${esc(z[0])}">`).join("");
 const zoneIdx = name => { const n = (name || "").trim().toLowerCase(); return ZONES.findIndex(z => z[0].toLowerCase() === n); };
 // confirmado no jogo: Thetford Portal → Widemoor Shore = "Saída Nordeste" (sem espelho, sem rotação)
@@ -511,7 +528,7 @@ function renderRoute() {
   const tag = o => [o === opts[0] && "mais segura", o === pickOption(opts, { type: "bal" }) && "equilibrada", o === opts[opts.length - 1] && "mais curta"].filter(Boolean).join(" · ");
   routeStep = Math.min(routeStep, route.length - 1);
   const reds = route.filter(i => ZONES[i][1] === 4).length, blacks = route.filter(i => ZONES[i][1] === 5).length;
-  $("#rSummary").innerHTML = `<div class="bar" style="margin-bottom:8px">${opts.map((o, i) => `<button class="${o === chosen ? "btn" : "btn2"}" data-opt="${i}">${o.jumps} saltos · ${o.danger} perigosas${tag(o) ? `<small style="display:block;font-size:11px">${tag(o)}</small>` : ""}</button>`).join("")}</div>
+  $("#rSummary").innerHTML = `<div class="ropts">${opts.map((o, i) => `<button class="${o === chosen ? "btn" : "btn2"}" data-opt="${i}">${o.jumps} saltos · ${o.danger} perigosas${tag(o) ? `<small style="display:block;font-size:11px">${tag(o)}</small>` : ""}</button>`).join("")}</div>
     <b class="gold">${route.length - 1} saltos</b> · ${reds} zonas vermelhas · ${blacks} pretas${reds + blacks ? ` · <span class="neg">cuidado: podes perder a carga</span>` : ""}. Clica num passo para marcar onde estás.`;
   $("#rList").innerHTML = route.map((z, i) => `<li data-step="${i}" class="${i < routeStep ? "done" : i === routeStep ? "cur" : ""}">
     <span class="mut" style="width:22px">${i + 1}.</span>${zoneLabel(z)}<span class="mut">${ZTYPE[ZONES[z][1]] || ""}</span>
@@ -519,6 +536,9 @@ function renderRoute() {
   renderOverlay();
 }
 for (const id of ["rFrom", "rTo"]) $("#" + id).onchange = () => { routeStep = 0; renderRoute(); };
+$("#rSwap").onclick = () => { const f = $("#rFrom").value; $("#rFrom").value = $("#rTo").value; $("#rTo").value = f; routeStep = 0; renderRoute(); };
+$("#rQuick").innerHTML = QUICK.map(c => `<button class="btn2" data-c="${esc(c)}">${esc(c)}</button>`).join("");
+$("#rQuick").onclick = e => { const b = e.target.closest("button[data-c]"); if (b) { $("#rTo").value = b.dataset.c; routeStep = 0; renderRoute(); } };
 $("#rSummary").onclick = e => {
   const b = e.target.closest("button[data-opt]"); if (!b) return;
   const a = zoneIdx($("#rFrom").value), z = zoneIdx($("#rTo").value), opts = routeOptions(a, z), o = opts[+b.dataset.opt];
@@ -553,7 +573,6 @@ function updateHere() {
     + (ocrMsg ? `<div class="mut" style="font-size:11px;width:100%">${esc(ocrMsg)}</div>` : "");
   const on = pip.document.getElementById("ocrOn"); if (on) on.onclick = () => $("#ocrBtn").click();
 }
-const QUICK = ["Thetford", "Lymhurst", "Bridgewatch", "Martlock", "Fort Sterling", "Caerleon"];
 function renderOverlay() {
   if (!pip) return;
   const d = pip.document, box = d.getElementById("dyn"); if (!box) return;
