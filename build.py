@@ -75,3 +75,9 @@ for i, zz in enumerate(out):
 html = open("index.html", encoding="utf-8").read().replace("__EXITS__", json.dumps(exits_out, separators=(",", ":")))
 open("index.html", "w", encoding="utf-8").write(html)
 print(sum(1 for e in exits_out if e), "zonas com saídas no minimapa")
+
+# ---- Roads of Avalon: só para o OCR as reconhecer (as ligações mudam todos os dias, não entram nas rotas) ----
+roads = sorted({z["displayName"] for z in zones if z["type"] == 6})
+html = open("index.html", encoding="utf-8").read().replace("__ROADS__", json.dumps(roads, separators=(",", ":")))
+open("index.html", "w", encoding="utf-8").write(html)
+print(len(roads), "roads")
