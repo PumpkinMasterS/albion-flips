@@ -80,6 +80,7 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
   <div><h1>Albion Flips</h1><div class="sub">Mercado da Europa · dados do Albion Online Data Project, enviados por jogadores</div></div>
   <span style="flex:1"></span>
   <label>Premium<select id="prem"><option value="1">Sim · taxa 4%</option><option value="0">Não · taxa 8%</option></select></label>
+  <button class="btn" id="nav" title="Abre o orientador por cima do jogo">🧭 Navegador</button>
   <button class="btn" id="go">Atualizar mercado</button>
 </header>
 <div class="progress"><i id="prog"></i></div>
@@ -455,7 +456,11 @@ function pickOption(opts, pol) {
   return opts.reduce((x, o) => (o.jumps + 3 * o.danger < x.jumps + 3 * x.danger ? o : x)); // equilibrada: cada zona perigosa "vale" 3 saltos
 }
 // ângulo (graus, 0 = Este, sentido anti-horário) da zona a para a zona b, já com a calibração
+const EXITS = __EXITS__; // por zona: [este, norte, zona de destino] de cada placa de saída no minimapa
+const exitTo = (a, b) => (EXITS[a] || []).find(e => e[2] === b);
 function angle(a, b, c = cal) {
+  const ex = exitTo(a, b);
+  if (ex) return (Math.atan2(ex[1], ex[0]) * 180 / Math.PI + 360) % 360; // posição real da placa na zona
   const dx = ZONES[b][2] - ZONES[a][2], dy = ZONES[b][3] - ZONES[a][3];
   return ((Math.atan2(-dy, c.mirror ? -dx : dx) * 180 / Math.PI + c.rot * 45) % 360 + 360) % 360;
 }
@@ -463,6 +468,21 @@ const compass = deg => COMPASS[Math.round(deg / 45) % 8];
 // cidade <-> "<cidade> Portal" (Outlands) é um teletransporte, não uma saída com direção
 const isPortal = (a, b) => ZONES[a][0] === ZONES[b][0] + " Portal" || ZONES[b][0] === ZONES[a][0] + " Portal";
 const arrowSvg = deg => `<svg viewBox="0 0 24 24" style="transform:rotate(${90 - deg}deg)"><path d="M12 2 20 14h-5v8h-6v-8H4z" fill="currentColor"/></svg>`;
+// minimapa da zona (losango como no jogo): placas de saída, a que tens de seguir a dourado, de onde vieste a azul
+function miniMap(z, next, prev, size = 120) {
+  const ex = EXITS[z] || [], R = Math.SQRT2, P = e => [e[0], -e[1]];
+  const tgt = exitTo(z, next), from = prev >= 0 ? exitTo(z, prev) : null;
+  const [sx, sy] = from ? P(from) : [0, 0];
+  return `<svg class="mm" viewBox="-1.75 -1.75 3.5 3.5" width="${size}" height="${size}" style="flex:none">
+    <polygon points="0,${-R} ${R},0 0,${R} ${-R},0" fill="#3a2a17" stroke="#d6a84f" stroke-width="0.05"/>
+    <g font-family="Cinzel,serif" font-size="0.32" fill="#f3d58a" text-anchor="middle" dominant-baseline="middle">
+      <text x="0" y="${-R - 0.22}">N</text><text x="${R + 0.2}" y="0">E</text><text x="0" y="${R + 0.22}">S</text><text x="${-R - 0.22}" y="0">O</text></g>
+    ${ex.map(e => { const [x, y] = P(e); return `<circle cx="${x}" cy="${y}" r="0.09" fill="${e === tgt ? "none" : "#8a7656"}"/>`; }).join("")}
+    ${tgt ? `<line x1="${sx}" y1="${sy}" x2="${P(tgt)[0]}" y2="${P(tgt)[1]}" stroke="#f3d58a" stroke-width="0.07" stroke-dasharray="0.14 0.1"/>
+      <circle cx="${P(tgt)[0]}" cy="${P(tgt)[1]}" r="0.2" fill="#f3d58a" stroke="#2a1a08" stroke-width="0.04"><animate attributeName="r" values="0.16;0.26;0.16" dur="1.2s" repeatCount="indefinite"/></circle>` : ""}
+    <circle cx="${sx}" cy="${sy}" r="0.13" fill="#4a8fe0" stroke="#fff" stroke-width="0.04"/>
+  </svg>`;
+}
 const zoneLabel = i => `<span class="zdot z${ZONES[i][1]}"></span><span>${esc(ZONES[i][0])}${ZONES[i][4] && ![0, 1, 7].includes(ZONES[i][1]) ? ` <span class="mut">T${ZONES[i][4]}</span>` : ""}</span>`;
 
 let route = null;
@@ -498,7 +518,7 @@ const PIP_CSS = `body{margin:0;background:#17110bee;color:#efe3c8;font:14px/1.35
 .h{display:flex;justify-content:space-between;color:#a8977a;font-size:12px}
 .cur{font:700 18px Cinzel,serif;color:#f3d58a;margin:6px 0;display:flex;align-items:center;gap:8px}
 .go{display:flex;align-items:center;gap:10px;background:#2a1d12;border:1px solid #5a4128;border-radius:6px;padding:8px;margin:6px 0}
-.go svg{width:44px;height:44px;color:#f3d58a;flex:none}.go b{font:800 22px Cinzel,serif;color:#f3d58a}
+.go svg{width:44px;height:44px;color:#f3d58a;flex:none}.go svg.mm{width:130px;height:130px}.go b{font:800 22px Cinzel,serif;color:#f3d58a}
 .nx{font-size:13px;color:#a8977a}.nx div{display:flex;align-items:center;gap:6px;padding:2px 0}
 .zdot{width:12px;height:12px;border-radius:50%;flex:none;border:2px solid #0008;display:inline-block}
 .z0,.z1{background:#d6a84f}.z2{background:#4a8fe0}.z3{background:#e2c044}.z4{background:#d9473a}.z5{background:#111;border-color:#bbb}.z7{background:#9b6bd6}
@@ -513,8 +533,10 @@ button.q{flex:none;font:600 11px "Alegreya Sans",sans-serif;padding:3px 7px;back
 let currentZone = -1, ocrMsg = ""; // última zona lida pelo OCR
 function updateHere() {
   const el = pip && pip.document.getElementById("here"); if (!el) return;
-  el.innerHTML = (currentZone >= 0 ? `Estás em ${zoneLabel(currentZone)}` : `<span class="mut">${ocr ? "A procurar o nome da zona…" : "Leitura desligada: liga-a no dashboard"}</span>`)
+  el.innerHTML = (currentZone >= 0 ? `Estás em ${zoneLabel(currentZone)}` : `<span class="mut">${ocr ? "A procurar o nome da zona…" : "Leitura desligada"}</span>`)
+    + (ocr ? "" : ` <button class="sm" id="ocrOn" style="flex:none;font-size:12px;padding:3px 8px">Ligar leitura</button>`)
     + (ocrMsg ? `<div class="mut" style="font-size:11px;width:100%">${esc(ocrMsg)}</div>` : "");
+  const on = pip.document.getElementById("ocrOn"); if (on) on.onclick = () => $("#ocrBtn").click();
 }
 const QUICK = ["Thetford", "Lymhurst", "Bridgewatch", "Martlock", "Fort Sterling", "Caerleon"];
 function renderOverlay() {
@@ -525,7 +547,7 @@ function renderOverlay() {
   const z = route[routeStep], last = routeStep === route.length - 1;
   const nxt = route.slice(routeStep + 1, routeStep + 5);
   box.innerHTML = `<div class="h"><span>Passo ${routeStep + 1}/${route.length}</span><span>➜ ${esc(ZONES[route[route.length - 1]][0])}</span></div>
-    ${last ? `<div class="go"><b>Chegaste!</b></div>` : isPortal(z, route[routeStep + 1]) ? `<div class="go"><b>Portal</b><div>entra no portal da cidade para ${zoneLabel(route[routeStep + 1])}</div></div>` : `<div class="go">${arrowSvg(angle(z, route[routeStep + 1]))}<div><b>${compass(angle(z, route[routeStep + 1]))}</b><div>para ${zoneLabel(route[routeStep + 1])}</div></div></div>`}
+    ${last ? `<div class="go"><b>Chegaste!</b></div>` : isPortal(z, route[routeStep + 1]) ? `<div class="go"><b>Portal</b><div>entra no portal da cidade para ${zoneLabel(route[routeStep + 1])}</div></div>` : `<div class="go">${exitTo(z, route[routeStep + 1]) ? miniMap(z, route[routeStep + 1], routeStep > 0 ? route[routeStep - 1] : -1) : arrowSvg(angle(z, route[routeStep + 1]))}<div><b>${compass(angle(z, route[routeStep + 1]))}</b><div>saída para ${zoneLabel(route[routeStep + 1])}</div><div class="mut" style="font-size:12px;margin-top:4px">faltam ${route.length - 1 - routeStep} zonas${(() => { const d = route.slice(routeStep + 1).filter(i => ZONES[i][1] === 4 || ZONES[i][1] === 5).length; return d ? ` · ${d} perigosas` : ""; })()}</div></div></div>`}
     <div class="nx">${nxt.slice(1).map(i => `<div>${zoneLabel(i)}</div>`).join("")}</div>
     <div class="btns"><button id="p">◀</button><button id="n">Entrei ▶</button></div>`;
   d.getElementById("p").onclick = () => { routeStep = Math.max(0, routeStep - 1); renderRoute(); };
@@ -551,10 +573,12 @@ function buildOverlay() {
   d.querySelector(".quick").onclick = e => { const b = e.target.closest("button[data-c]"); if (b) goTo(b.dataset.c); };
   renderOverlay();
 }
+// Navegador: um clique abre o overlay; a leitura liga-se lá dentro (o browser pede outro clique para partilhar a janela)
+$("#nav").onclick = () => { document.querySelector('.tabs button[data-tab="route"]').click(); $("#rOverlay").click(); };
 $("#rOverlay").onclick = async () => {
   if (!("documentPictureInPicture" in window)) return alert("O overlay precisa do Chrome ou do Edge (versão recente).");
   if (pip) { pip.close(); pip = null; }
-  pip = await documentPictureInPicture.requestWindow({ width: 300, height: 380 });
+  pip = await documentPictureInPicture.requestWindow({ width: 320, height: 440 });
   const st = pip.document.createElement("style"); st.textContent = PIP_CSS; pip.document.head.append(st);
   const fl = pip.document.createElement("link"); fl.rel = "stylesheet"; fl.href = "https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Alegreya+Sans:wght@400;700&display=swap"; pip.document.head.append(fl);
   pip.addEventListener("pagehide", () => { pip = null; });
@@ -738,7 +762,7 @@ $("#ocrBtn").onclick = async () => {
     const video = document.createElement("video"); video.muted = true; video.srcObject = stream; await video.play();
     ocr = { stream, video, worker, chatWorker, last: -1, hits: 0, cap: window.ImageCapture ? new ImageCapture(stream.getVideoTracks()[0]) : null };
     stream.getVideoTracks()[0].onended = () => { if (ocr) $("#ocrBtn").click(); };
-    $("#ocrBtn").textContent = "Desligar leitura"; ocrTick();
+    $("#ocrBtn").textContent = "Desligar leitura"; updateHere(); ocrTick();
   } catch (e) { $("#ocrStatus").textContent = "Não foi possível ligar: " + (e.message || e); }
 };
 
