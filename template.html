@@ -135,6 +135,7 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
     <label>fundo %<input id="ocrB" type="number" step="0.5" value="99.2"></label>
   </div>
   <div class="bar" style="margin-top:10px;align-items:center">
+    <canvas id="ocrFull" width="360" height="225" title="Arrasta um retângulo à volta do nome da zona" style="background:#000;border:1px solid var(--line);border-radius:4px;max-width:100%;cursor:crosshair"></canvas>
     <canvas id="ocrPrev" width="300" height="40" style="background:#000;border:1px solid var(--line);border-radius:4px;max-width:100%"></canvas>
     <div id="ocrStatus" class="sub">Desligada.</div>
   </div>
@@ -589,17 +590,22 @@ function lev(a, b) {
   for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
   return prev[n];
 }
-function matchZone(text) {
+function zoneScores(text) {
   const t = text.toLowerCase().replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim();
-  let best = -1, bestS = 0;
-  ZNORM.forEach((z, i) => {
-    if (z.length > t.length + 3) return;
-    for (let p = 0; p <= Math.max(0, t.length - z.length); p++) {
-      const s = 1 - lev(z, t.substr(p, z.length)) / z.length;
-      if (s > bestS || (s === bestS && best >= 0 && z.length > ZNORM[best].length)) { bestS = s; best = i; }
-    }
+  return ZNORM.map(z => {
+    if (!t || z.length > t.length + 3) return 0;
+    let best = 0;
+    for (let p = 0; p <= Math.max(0, t.length - z.length); p++) best = Math.max(best, 1 - lev(z, t.substr(p, z.length)) / z.length);
+    return best;
   });
-  return bestS >= 0.8 ? best : -1;
+}
+// Mudas sempre para uma zona vizinha: se já sabemos onde estás, basta uma leitura razoável de uma vizinha.
+function matchZone(text) {
+  const sc = zoneScores(text);
+  const pick = ids => ids.reduce((b, i) => (sc[i] > sc[b] || (sc[i] === sc[b] && ZNORM[i].length > ZNORM[b].length) ? i : b), ids[0]);
+  if (currentZone >= 0) { const near = [currentZone, ...ZONES[currentZone][5]], i = pick(near); if (sc[i] >= 0.6) return i; }
+  const g = pick(ZONES.map((_, i) => i));
+  return sc[g] >= 0.8 ? g : -1;
 }
 let ocr = null; // { stream, video, worker, last, hits }
 async function ocrTick() {
@@ -608,8 +614,13 @@ async function ocrTick() {
   if (ocr.cap) { try { v = await ocr.cap.grabFrame(); } catch { v = ocr.video; } }
   const W = v.videoWidth || v.width, H = v.videoHeight || v.height;
   if (W && H) {
+    const f = $("#ocrFull"), fg = f.getContext("2d"); f.height = Math.round(f.width * H / W); fg.drawImage(v, 0, 0, f.width, f.height);
+    const L0 = +$("#ocrL").value / 100, R0 = +$("#ocrR").value / 100, T0 = +$("#ocrT").value / 100, B0 = +$("#ocrB").value / 100;
+    fg.strokeStyle = "#f3d58a"; fg.lineWidth = 2; fg.strokeRect(L0 * f.width, T0 * f.height, (R0 - L0) * f.width, (B0 - T0) * f.height);
+  }
+  if (W && H) {
     const L = +$("#ocrL").value / 100, R = +$("#ocrR").value / 100, T = +$("#ocrT").value / 100, B = +$("#ocrB").value / 100;
-    const sx = W * L, sy = H * T, sw = Math.max(1, W * (R - L)), sh = Math.max(1, H * (B - T)), k = 48 / sh, pad = 16;
+    const sx = W * L, sy = H * T, sw = Math.max(1, W * (R - L)), sh = Math.max(1, H * (B - T)), k = 90 / sh, pad = 20;
     // recorte ampliado em tons de cinzento
     const cw = Math.round(sw * k), ch = Math.round(sh * k), src = ocr.canvas; src.width = cw; src.height = ch;
     const g = src.getContext("2d", { willReadFrequently: true }); g.imageSmoothingQuality = "high"; g.drawImage(v, sx, sy, sw, sh, 0, 0, cw, ch);
@@ -658,6 +669,15 @@ function onZoneSeen(z) {
   if (at >= 0) { if (at !== routeStep) { routeStep = at; renderRoute(); } return; }
   $("#rFrom").value = ZONES[z][0]; routeStep = 0; renderRoute();
   $("#ocrStatus").innerHTML += " · <span class='neg'>fora da rota, recalculada</span>";
+}
+{ // arrastar na pré-visualização para escolher a área do nome
+  let start = null; const f = $("#ocrFull");
+  const pos = e => { const r = f.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
+  f.onpointerdown = e => { start = pos(e); f.setPointerCapture(e.pointerId); };
+  f.onpointermove = e => { if (!start) return; const [x, y] = pos(e);
+    const set = (id, v) => { $("#" + id).value = (v * 100).toFixed(1); };
+    set("ocrL", Math.min(start[0], x)); set("ocrR", Math.max(start[0], x)); set("ocrT", Math.min(start[1], y)); set("ocrB", Math.max(start[1], y)); };
+  f.onpointerup = () => { start = null; store.set("ocr", Object.fromEntries(OCR_KEYS.map(x => [x, $("#" + x).value]))); };
 }
 $("#ocrBtn").onclick = async () => {
   if (ocr) { ocr.stream.getTracks().forEach(t => t.stop()); ocr.worker.terminate(); ocr = null; $("#ocrBtn").textContent = "Ligar leitura"; $("#ocrStatus").textContent = "Desligada."; return; }
