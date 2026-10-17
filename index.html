@@ -451,6 +451,8 @@ function angle(a, b, c = cal) {
   return ((Math.atan2(-dy, c.mirror ? -dx : dx) * 180 / Math.PI + c.rot * 45) % 360 + 360) % 360;
 }
 const compass = deg => COMPASS[Math.round(deg / 45) % 8];
+// cidade <-> "<cidade> Portal" (Outlands) é um teletransporte, não uma saída com direção
+const isPortal = (a, b) => ZONES[a][0] === ZONES[b][0] + " Portal" || ZONES[b][0] === ZONES[a][0] + " Portal";
 const arrowSvg = deg => `<svg viewBox="0 0 24 24" style="transform:rotate(${90 - deg}deg)"><path d="M12 2 20 14h-5v8h-6v-8H4z" fill="currentColor"/></svg>`;
 const zoneLabel = i => `<span class="zdot z${ZONES[i][1]}"></span><span>${esc(ZONES[i][0])}${ZONES[i][4] && ![0, 1, 7].includes(ZONES[i][1]) ? ` <span class="mut">T${ZONES[i][4]}</span>` : ""}</span>`;
 
@@ -469,7 +471,7 @@ function renderRoute() {
     <b class="gold">${route.length - 1} saltos</b> · ${reds} zonas vermelhas · ${blacks} pretas${reds + blacks ? ` · <span class="neg">cuidado: podes perder a carga</span>` : ""}. Clica num passo para marcar onde estás.`;
   $("#rList").innerHTML = route.map((z, i) => `<li data-step="${i}" class="${i < routeStep ? "done" : i === routeStep ? "cur" : ""}">
     <span class="mut" style="width:22px">${i + 1}.</span>${zoneLabel(z)}<span class="mut">${ZTYPE[ZONES[z][1]] || ""}</span>
-    ${i < route.length - 1 ? `<span class="dir">${arrowSvg(angle(z, route[i + 1]))}${compass(angle(z, route[i + 1]))}</span>` : `<span class="dir">Chegaste</span>`}</li>`).join("");
+    ${i === route.length - 1 ? `<span class="dir">Chegaste</span>` : isPortal(z, route[i + 1]) ? `<span class="dir">Portal da cidade</span>` : `<span class="dir">${arrowSvg(angle(z, route[i + 1]))}${compass(angle(z, route[i + 1]))}</span>`}</li>`).join("");
   renderOverlay();
 }
 for (const id of ["rFrom", "rTo"]) $("#" + id).onchange = () => { routeStep = 0; renderRoute(); };
@@ -492,29 +494,57 @@ const PIP_CSS = `body{margin:0;background:#17110bee;color:#efe3c8;font:14px/1.35
 .zdot{width:12px;height:12px;border-radius:50%;flex:none;border:2px solid #0008;display:inline-block}
 .z0,.z1{background:#d6a84f}.z2{background:#4a8fe0}.z3{background:#e2c044}.z4{background:#d9473a}.z5{background:#111;border-color:#bbb}.z7{background:#9b6bd6}
 .mut{color:#a8977a}.btns{display:flex;gap:6px;margin-top:8px}
-button{flex:1;font:700 16px Cinzel,serif;padding:8px;border-radius:5px;border:1px solid #7a5520;background:linear-gradient(#f3d58a,#c48f35);color:#2a1a08;cursor:pointer}`;
+button{flex:1;font:700 16px Cinzel,serif;padding:8px;border-radius:5px;border:1px solid #7a5520;background:linear-gradient(#f3d58a,#c48f35);color:#2a1a08;cursor:pointer}
+.here{font-size:13px;display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.dest{border-top:1px solid #5a4128;margin-top:8px;padding-top:8px}.row{display:flex;gap:6px}
+input{flex:1;min-width:0;font:inherit;color:#efe3c8;background:#120c07;border:1px solid #5a4128;border-radius:4px;padding:6px}
+button.sm{flex:none;font-size:13px;padding:6px 10px}
+.quick{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+button.q{flex:none;font:600 11px "Alegreya Sans",sans-serif;padding:3px 7px;background:#2a1d12;color:#f3d58a;border:1px solid #5a4128}`;
+let currentZone = -1; // última zona lida pelo OCR
+const QUICK = ["Thetford", "Lymhurst", "Bridgewatch", "Martlock", "Fort Sterling", "Caerleon"];
 function renderOverlay() {
   if (!pip) return;
-  const d = pip.document;
-  if (!route) { d.body.innerHTML = `<div class="mut">Sem rota. Escolhe origem e destino no dashboard.</div>`; return; }
+  const d = pip.document, box = d.getElementById("dyn"); if (!box) return;
+  d.getElementById("here").innerHTML = currentZone >= 0 ? `Estás em ${zoneLabel(currentZone)}` : `<span class="mut">${ocr ? "A procurar o nome da zona…" : "Leitura desligada: liga-a no dashboard"}</span>`;
+  if (!route) { box.innerHTML = `<div class="mut" style="margin:8px 0">Escolhe um destino em baixo.</div>`; return; }
   const z = route[routeStep], last = routeStep === route.length - 1;
   const nxt = route.slice(routeStep + 1, routeStep + 5);
-  d.body.innerHTML = `<div class="h"><span>Passo ${routeStep + 1}/${route.length}</span><span>${esc(ZONES[route[route.length - 1]][0])}</span></div>
-    <div class="cur">${zoneLabel(z)}</div>
-    ${last ? `<div class="go"><b>Chegaste!</b></div>` : `<div class="go">${arrowSvg(angle(z, route[routeStep + 1]))}<div><b>${compass(angle(z, route[routeStep + 1]))}</b><div>para ${zoneLabel(route[routeStep + 1])}</div></div></div>`}
+  box.innerHTML = `<div class="h"><span>Passo ${routeStep + 1}/${route.length}</span><span>➜ ${esc(ZONES[route[route.length - 1]][0])}</span></div>
+    ${last ? `<div class="go"><b>Chegaste!</b></div>` : isPortal(z, route[routeStep + 1]) ? `<div class="go"><b>Portal</b><div>entra no portal da cidade para ${zoneLabel(route[routeStep + 1])}</div></div>` : `<div class="go">${arrowSvg(angle(z, route[routeStep + 1]))}<div><b>${compass(angle(z, route[routeStep + 1]))}</b><div>para ${zoneLabel(route[routeStep + 1])}</div></div></div>`}
     <div class="nx">${nxt.slice(1).map(i => `<div>${zoneLabel(i)}</div>`).join("")}</div>
     <div class="btns"><button id="p">◀</button><button id="n">Entrei ▶</button></div>`;
   d.getElementById("p").onclick = () => { routeStep = Math.max(0, routeStep - 1); renderRoute(); };
   d.getElementById("n").onclick = () => { routeStep = Math.min(route.length - 1, routeStep + 1); renderRoute(); };
 }
+// destino escolhido no overlay: parte de onde estás (OCR) e usa sempre a rota mais rápida
+function goTo(name) {
+  const t = zoneIdx(name); if (t < 0) return false;
+  const from = currentZone >= 0 ? currentZone : route ? route[routeStep] : zoneIdx($("#rFrom").value);
+  if (from < 0) return false;
+  $("#rFrom").value = ZONES[from][0]; $("#rTo").value = ZONES[t][0]; rPolicy = { type: "short" }; routeStep = 0; renderRoute();
+  return true;
+}
+function buildOverlay() {
+  const d = pip.document;
+  d.body.innerHTML = `<div id="here" class="here"></div><div id="dyn"></div>
+    <div class="dest"><div class="row"><input id="dst" list="pzl" placeholder="Destino (ex.: Thetford)"><button id="goBtn" class="sm">Ir</button></div>
+    <div class="quick">${QUICK.map(c => `<button class="q" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div></div>
+    <datalist id="pzl">${ZONES.map(z => `<option value="${esc(z[0])}">`).join("")}</datalist>`;
+  const go = () => { if (!goTo(d.getElementById("dst").value)) d.getElementById("dst").style.outline = "1px solid #ef6b5b"; else { d.getElementById("dst").style.outline = ""; d.getElementById("dst").value = ""; } };
+  d.getElementById("goBtn").onclick = go;
+  d.getElementById("dst").onkeydown = e => { if (e.key === "Enter") go(); };
+  d.querySelector(".quick").onclick = e => { const b = e.target.closest("button[data-c]"); if (b) goTo(b.dataset.c); };
+  renderOverlay();
+}
 $("#rOverlay").onclick = async () => {
   if (!("documentPictureInPicture" in window)) return alert("O overlay precisa do Chrome ou do Edge (versão recente).");
   if (pip) { pip.close(); pip = null; }
-  pip = await documentPictureInPicture.requestWindow({ width: 280, height: 300 });
+  pip = await documentPictureInPicture.requestWindow({ width: 300, height: 380 });
   const st = pip.document.createElement("style"); st.textContent = PIP_CSS; pip.document.head.append(st);
   const fl = pip.document.createElement("link"); fl.rel = "stylesheet"; fl.href = "https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Alegreya+Sans:wght@400;700&display=swap"; pip.document.head.append(fl);
   pip.addEventListener("pagehide", () => { pip = null; });
-  renderRoute();
+  buildOverlay(); renderRoute();
 };
 
 // calibração das direções com o minimapa
@@ -595,6 +625,7 @@ async function ocrTick() {
   (pip ? pip.window : window).setTimeout(ocrTick, 1500);
 }
 function onZoneSeen(z) {
+  currentZone = z; renderOverlay();
   if (!route) return;
   const at = route.indexOf(z, routeStep) >= 0 ? route.indexOf(z, routeStep) : route.indexOf(z);
   if (at >= 0) { if (at !== routeStep) { routeStep = at; renderRoute(); } return; }
