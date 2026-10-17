@@ -14,7 +14,7 @@
 *{box-sizing:border-box}
 body{margin:0;color:var(--fg);font:15px/1.45 "Alegreya Sans",system-ui,sans-serif;
   background:radial-gradient(ellipse at top,#3a2716 0%,var(--bg) 60%) fixed,var(--bg)}
-main{max-width:1280px;margin:0 auto;padding:16px}
+main{max-width:1720px;margin:0 auto;padding:16px}
 header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:6px 0 14px;border-bottom:2px solid var(--line)}
 .crest{width:46px;height:46px;flex:none}
 h1{font:800 28px/1 Cinzel,serif;margin:0;letter-spacing:.06em;color:var(--gold2);text-shadow:0 2px 0 #000}
@@ -43,11 +43,11 @@ button{font:inherit;cursor:pointer}
 .progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#c48f35,#f3d58a);transition:width .2s}
 .wrap{overflow-x:auto;padding:0}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
-th,td{padding:7px 10px;border-bottom:1px solid #5a412855;text-align:right;white-space:nowrap}
+th,td{padding:6px 7px;border-bottom:1px solid #5a412855;text-align:right;white-space:nowrap}
 th{font:600 11px Cinzel,serif;letter-spacing:.05em;color:var(--gold);cursor:pointer;user-select:none;position:sticky;top:0;background:#2b1e12;z-index:1}
 th.on{color:var(--gold2)}
 tbody tr:hover{background:#ffffff08}
-td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
+td.item,th:first-child{text-align:left;white-space:normal;min-width:190px}
 .it{display:flex;align-items:center;gap:8px}
 .it img{width:40px;height:40px;flex:none;background:#0006;border:1px solid var(--line);border-radius:4px}
 .it small{display:block;color:var(--mut);font-size:11px}
@@ -61,6 +61,7 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
 .note{background:var(--parch);color:var(--ink);border-radius:6px;padding:10px 12px;font-size:13px;border:1px solid #b89a5e}
 .hide{display:none}
 body.notrip .trip,body.notrip .tripf{display:none}
+td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .btn2{padding:3px 8px;font-size:12px}
 .route{margin:0;padding:0;list-style:none;counter-reset:s}
 .route li{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid #5a412855;cursor:pointer}
 .route li.cur{background:#d6a84f22;outline:1px solid var(--gold);border-radius:4px}
@@ -113,8 +114,8 @@ body.notrip .trip,body.notrip .tripf{display:none}
 </div>
 <div class="frame wrap"><table id="tOpp"><thead><tr>
   <th data-k="name">Item</th><th data-k="tier">Tier</th><th data-k="route">Rota</th><th data-k="buy">Compra</th><th data-k="sell">Venda</th>
-  <th data-k="profit">Lucro/un.</th><th data-k="roi">ROI</th><th data-k="vol">Vendas/dia</th><th data-k="avg">Médio 7d</th>
-  <th data-k="day">Lucro/dia est.</th><th data-k="w" class="trip">Peso/un.</th><th data-k="units" class="trip">Un./viagem</th><th data-k="trip" class="trip">Lucro/viagem</th><th data-k="ageH">Idade</th><th></th></tr></thead><tbody></tbody></table></div>
+  <th data-k="profit">Lucro/un.</th><th data-k="roi">ROI</th><th data-k="vol">Vendas/dia</th>
+  <th data-k="day">Lucro/dia</th><th data-k="w" class="trip">Peso</th><th data-k="units" class="trip">Un./viagem</th><th data-k="trip" class="trip">Lucro/viagem</th><th data-k="ageH">Idade</th><th></th></tr></thead><tbody></tbody></table></div>
 </section>
 
 <section id="pRoute" class="hide">
@@ -333,7 +334,7 @@ async function loadVolumes(rows) {
 }
 let sortK = "day", sortDir = -1, rendering = false;
 async function render(fetchVol = true) {
-  if (!loadedAt) { $("#tOpp tbody").innerHTML = `<tr><td colspan="15" class="mut" style="text-align:center;padding:30px">Ainda sem dados. Carrega em «Atualizar mercado».</td></tr>`; return; }
+  if (!loadedAt) { $("#tOpp tbody").innerHTML = `<tr><td colspan="14" class="mut" style="text-align:center;padding:30px">Ainda sem dados. Carrega em «Atualizar mercado».</td></tr>`; return; }
   const minVol = +$("#minVol").value || 0, maxBuy = +$("#maxBuy").value || Infinity, q = $("#q").value.trim().toLowerCase();
   const s = tabState[tabNow];
   let rows = candidates().filter(r => r.buy <= maxBuy && (!q || nameOf(r.id).toLowerCase().includes(q) || r.id.toLowerCase().includes(q)));
@@ -361,14 +362,14 @@ async function render(fetchVol = true) {
     <td><span class="tier t${r.tier[0]}">${r.tier}</span></td>
     <td>${r.from === r.to ? `<span class="city">${esc(r.from)}</span>` : `<span class="city">${esc(r.from)}</span><span class="arrow">➜</span><span class="city">${esc(cityLabel(r.to))}</span>`}</td>
     <td>${fmt(r.buy)}<small class="mut" style="display:block">${buyL}</small></td>
-    <td>${fmt(r.sell)}<small class="mut" style="display:block">${sellL(r)}</small></td>
-    <td class="pos"><b>${fmt(r.profit)}</b></td><td>${(r.roi * 100).toFixed(0)}%</td><td>${fmt(r.vol)}</td><td>${fmt(r.avg)}</td>
+    <td>${fmt(r.sell)}<small class="mut" style="display:block">${sellL(r)}<br>média 7d ${fmt(r.avg)}</small></td>
+    <td class="pos"><b>${fmt(r.profit)}</b></td><td>${(r.roi * 100).toFixed(0)}%</td><td>${fmt(r.vol)}</td>
     <td class="gold">${fmt(r.day)}</td>
     <td class="trip">${r.w == null ? "—" : r.w.toLocaleString("pt-PT") + " kg"}</td><td class="trip">${fmt(r.units)}</td><td class="trip gold"><b>${fmt(r.trip)}</b></td>
     <td class="mut">${r.ageH.toFixed(1)}h</td>
-    <td><button class="btn2" data-buy="${esc(r.id)}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button>
+    <td class="acts"><button class="btn2" data-buy="${esc(r.id)}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button>
       ${r.from !== r.to && r.from !== "Brecilien" && r.to !== "Brecilien" ? `<button class="btn2" data-route-from="${esc(r.from)}" data-route-to="${esc(r.to === BM ? "Caerleon" : r.to)}">Rota</button>` : ""}</td></tr>`).join("")
-    || `<tr><td colspan="15" class="mut" style="text-align:center;padding:30px">Nada com lucro com estes filtros.</td></tr>`;
+    || `<tr><td colspan="14" class="mut" style="text-align:center;padding:30px">Nada com lucro com estes filtros.</td></tr>`;
   $("#status").textContent = `${rows.length} oportunidades · mercado lido às ${new Date(loadedAt).toLocaleTimeString("pt-PT")}`;
 }
 document.querySelectorAll("#tOpp th[data-k]").forEach(th => th.onclick = () => { sortDir = sortK === th.dataset.k ? -sortDir : -1; sortK = th.dataset.k; render(false); });
