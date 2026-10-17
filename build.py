@@ -81,3 +81,15 @@ roads = sorted({z["displayName"] for z in zones if z["type"] == 6})
 html = open("index.html", encoding="utf-8").read().replace("__ROADS__", json.dumps(roads, separators=(",", ":")))
 open("index.html", "w", encoding="utf-8").write(html)
 print(len(roads), "roads")
+
+# ---- peso de cada item (items.json "cru" do ao-bin-dumps; os encantamentos @n pesam o mesmo que o item base) ----
+raw_src = os.environ.get("ITEMS_FULL", "https://raw.githubusercontent.com/ao-data/ao-bin-dumps/master/items.json")
+raw = json.load(open(raw_src, encoding="utf-8")) if not raw_src.startswith("http") else json.load(urllib.request.urlopen(raw_src))
+weights = {}
+for cat, v in raw["items"].items():
+    for it in (v if isinstance(v, list) else [v]):
+        if isinstance(it, dict) and it.get("@uniquename") and it.get("@weight"):
+            weights[it["@uniquename"]] = round(float(it["@weight"]), 2)
+html = open("index.html", encoding="utf-8").read().replace("__WEIGHTS__", json.dumps(weights, separators=(",", ":")))
+open("index.html", "w", encoding="utf-8").write(html)
+print(len(weights), "pesos")

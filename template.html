@@ -60,6 +60,7 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
 .kpi b{display:block;font:800 22px Cinzel,serif;margin:2px 0}
 .note{background:var(--parch);color:var(--ink);border-radius:6px;padding:10px 12px;font-size:13px;border:1px solid #b89a5e}
 .hide{display:none}
+body.notrip .trip,body.notrip .tripf{display:none}
 .route{margin:0;padding:0;list-style:none;counter-reset:s}
 .route li{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid #5a412855;cursor:pointer}
 .route li.cur{background:#d6a84f22;outline:1px solid var(--gold);border-radius:4px}
@@ -104,6 +105,8 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
     <label>Idade máx. (h)<input id="age" type="number" value="6" min="1"></label>
     <label>Vendas/dia mín.<input id="minVol" type="number" value="5" min="0"></label>
     <label>Preço máx./un.<input id="maxBuy" type="number" placeholder="sem limite"></label>
+    <label class="tripf" title="Abre o inventário com a montaria e a bolsa equipadas: é o peso máximo menos o que já levas">Carga livre (kg)<input id="cap" type="number" placeholder="ex.: 2500"></label>
+    <label class="tripf">Prata para investir<input id="silver" type="number" placeholder="sem limite"></label>
     <label>Procurar<input id="q" placeholder="nome ou ID"></label>
   </div>
   <div id="hint" class="note" style="margin-top:12px"></div>
@@ -111,7 +114,7 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
 <div class="frame wrap"><table id="tOpp"><thead><tr>
   <th data-k="name">Item</th><th data-k="tier">Tier</th><th data-k="route">Rota</th><th data-k="buy">Compra</th><th data-k="sell">Venda</th>
   <th data-k="profit">Lucro/un.</th><th data-k="roi">ROI</th><th data-k="vol">Vendas/dia</th><th data-k="avg">Médio 7d</th>
-  <th data-k="day">Lucro/dia est.</th><th data-k="ageH">Idade</th><th></th></tr></thead><tbody></tbody></table></div>
+  <th data-k="day">Lucro/dia est.</th><th data-k="w" class="trip">Peso/un.</th><th data-k="units" class="trip">Un./viagem</th><th data-k="trip" class="trip">Lucro/viagem</th><th data-k="ageH">Idade</th><th></th></tr></thead><tbody></tbody></table></div>
 </section>
 
 <section id="pRoute" class="hide">
@@ -208,7 +211,9 @@ let tabNow = "city";
 const sel = (el, opts) => { el.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(""); };
 const ALL = [["*", "Todas"], ...CITIES.map(c => [c, c])];
 const prefs = store.get("prefs2", {});
-const PREF_KEYS = ["prem", "age", "minVol", "maxBuy"];
+const PREF_KEYS = ["prem", "age", "minVol", "maxBuy", "cap", "silver"];
+const WEIGHTS = __WEIGHTS__; // kg por unidade
+const weightOf = id => WEIGHTS[id] ?? WEIGHTS[id.split("@")[0]] ?? null;
 for (const k of PREF_KEYS) if (prefs[k] != null) $("#" + k).value = prefs[k];
 const tabState = Object.assign({
   city:  { from: "Thetford", buyMode: "order", sellMode: "order" },
@@ -234,7 +239,9 @@ function applyTab() {
   $("#buyMode").value = s.buyMode; if (s.sellMode) $("#sellMode").value = s.sellMode;
   $("#buyMode").disabled = false; $("#sellMode").disabled = tabNow === "city";
   if (tabNow === "city") $("#sellMode").value = "order";
-  $("#hint").innerHTML = HINTS[tabNow];
+  $("#hint").innerHTML = HINTS[tabNow] + (tabNow === "city" ? "" : " <br>Com a <b>carga livre</b> preenchida, vês quantas unidades cabem por viagem (limitado também pela prata e pelas vendas de um dia) e o lucro de cada viagem.");
+  document.body.classList.toggle("notrip", tabNow === "city");
+  if (tabNow !== "city" && sortK === "day" && +$("#cap").value) sortK = "trip";
   render();
 }
 for (const id of ["from", "to", "buyMode", "sellMode"]) $("#" + id).onchange = () => { tabState[tabNow][id] = $("#" + id).value; savePrefs(); render(); };
@@ -326,8 +333,9 @@ async function loadVolumes(rows) {
 }
 let sortK = "day", sortDir = -1, rendering = false;
 async function render(fetchVol = true) {
-  if (!loadedAt) { $("#tOpp tbody").innerHTML = `<tr><td colspan="12" class="mut" style="text-align:center;padding:30px">Ainda sem dados. Carrega em «Atualizar mercado».</td></tr>`; return; }
+  if (!loadedAt) { $("#tOpp tbody").innerHTML = `<tr><td colspan="15" class="mut" style="text-align:center;padding:30px">Ainda sem dados. Carrega em «Atualizar mercado».</td></tr>`; return; }
   const minVol = +$("#minVol").value || 0, maxBuy = +$("#maxBuy").value || Infinity, q = $("#q").value.trim().toLowerCase();
+  const s = tabState[tabNow];
   let rows = candidates().filter(r => r.buy <= maxBuy && (!q || nameOf(r.id).toLowerCase().includes(q) || r.id.toLowerCase().includes(q)));
   if (fetchVol && !rendering) {
     const top = new Set([...rows].sort((a, b) => b.profit - a.profit).slice(0, 250).concat([...rows].sort((a, b) => b.roi - a.roi).slice(0, 150)));
@@ -339,10 +347,14 @@ async function render(fetchVol = true) {
   }
   rows = rows.map(r => ({ ...r, ...(VOL[r.id + "|" + r.to] || {}) }))
     .filter(r => r.vol != null && r.vol >= minVol && (r.sellMode === "instant" || r.sell <= r.avg * 1.2))
-    .map(r => ({ ...r, name: nameOf(r.id), tier: tierOf(r.id), route: r.from + r.to, day: r.profit * Math.min(r.vol * (r.sellMode === "instant" ? 0.3 : 0.1), 50) }))
-    .sort((a, b) => (a[sortK] > b[sortK] ? 1 : -1) * sortDir).slice(0, 300);
+    .map(r => {
+      // unidades por viagem: o que cabe na carga livre, o que a prata paga e o que o mercado absorve num dia
+      const w = weightOf(r.id), cap = +$("#cap").value || 0, silver = +$("#silver").value || Infinity, cost = buyCost(r.buy, s.buyMode);
+      const units = cap && w ? Math.max(0, Math.min(Math.floor(cap / w), Math.floor(silver / cost), Math.max(1, Math.round(r.vol)))) : null;
+      return { ...r, name: nameOf(r.id), tier: tierOf(r.id), route: r.from + r.to, day: r.profit * Math.min(r.vol * (r.sellMode === "instant" ? 0.3 : 0.1), 50), w, units, trip: units == null ? null : units * r.profit };
+    })
+    .sort((a, b) => ((a[sortK] ?? -Infinity) > (b[sortK] ?? -Infinity) ? 1 : -1) * sortDir).slice(0, 300);
   document.querySelectorAll("#tOpp th").forEach(th => th.classList.toggle("on", th.dataset.k === sortK));
-  const s = tabState[tabNow];
   const buyL = s.buyMode === "order" ? "buy order" : "imediata", sellL = r => r.sellMode === "order" ? "sell order" : "imediata";
   $("#tOpp tbody").innerHTML = rows.map(r => `<tr>
     <td class="item"><div class="it"><img loading="lazy" src="${icon(r.id)}" alt=""><div>${esc(r.name)}<small>${esc(r.id)}</small></div></div></td>
@@ -351,10 +363,12 @@ async function render(fetchVol = true) {
     <td>${fmt(r.buy)}<small class="mut" style="display:block">${buyL}</small></td>
     <td>${fmt(r.sell)}<small class="mut" style="display:block">${sellL(r)}</small></td>
     <td class="pos"><b>${fmt(r.profit)}</b></td><td>${(r.roi * 100).toFixed(0)}%</td><td>${fmt(r.vol)}</td><td>${fmt(r.avg)}</td>
-    <td class="gold">${fmt(r.day)}</td><td class="mut">${r.ageH.toFixed(1)}h</td>
+    <td class="gold">${fmt(r.day)}</td>
+    <td class="trip">${r.w == null ? "—" : r.w.toLocaleString("pt-PT") + " kg"}</td><td class="trip">${fmt(r.units)}</td><td class="trip gold"><b>${fmt(r.trip)}</b></td>
+    <td class="mut">${r.ageH.toFixed(1)}h</td>
     <td><button class="btn2" data-buy="${esc(r.id)}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button>
       ${r.from !== r.to && r.from !== "Brecilien" && r.to !== "Brecilien" ? `<button class="btn2" data-route-from="${esc(r.from)}" data-route-to="${esc(r.to === BM ? "Caerleon" : r.to)}">Rota</button>` : ""}</td></tr>`).join("")
-    || `<tr><td colspan="12" class="mut" style="text-align:center;padding:30px">Nada com lucro com estes filtros.</td></tr>`;
+    || `<tr><td colspan="15" class="mut" style="text-align:center;padding:30px">Nada com lucro com estes filtros.</td></tr>`;
   $("#status").textContent = `${rows.length} oportunidades · mercado lido às ${new Date(loadedAt).toLocaleTimeString("pt-PT")}`;
 }
 document.querySelectorAll("#tOpp th[data-k]").forEach(th => th.onclick = () => { sortDir = sortK === th.dataset.k ? -sortDir : -1; sortK = th.dataset.k; render(false); });
