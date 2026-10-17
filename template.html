@@ -659,8 +659,9 @@ function matchGraph(text, strict) {
   return sc[g] >= strict ? g : -1;
 }
 // recorte de uma área do ecrã: ampliado, em cinzento, contraste esticado (a captura ao vivo sai desbotada), limiar de Otsu
-function prepare(v, W, H, pre, scaleFor) {
-  const L = +$("#" + pre + "L").value / 100, R = +$("#" + pre + "R").value / 100, T = +$("#" + pre + "T").value / 100, B = +$("#" + pre + "B").value / 100;
+const areaOf = pre => ({ L: +$("#" + pre + "L").value / 100, R: +$("#" + pre + "R").value / 100, T: +$("#" + pre + "T").value / 100, B: +$("#" + pre + "B").value / 100 });
+function prepare(v, W, H, area, scaleFor) {
+  const { L, R, T, B } = area;
   const sx = W * L, sy = H * T, sw = Math.max(1, W * (R - L)), sh = Math.max(1, H * (B - T)), k = scaleFor(sh);
   const cw = Math.max(1, Math.round(sw * k)), ch = Math.max(1, Math.round(sh * k)), src = document.createElement("canvas"); src.width = cw; src.height = ch;
   const g = src.getContext("2d", { willReadFrequently: true }); g.imageSmoothingQuality = "high"; g.drawImage(v, sx, sy, sw, sh, 0, 0, cw, ch);
@@ -687,19 +688,37 @@ function variant(P, mode, pad = 20) {
   x.putImageData(im, pad, pad); return c;
 }
 function showPrev(c) { const pv = $("#ocrPrev"), pg = pv.getContext("2d"); pg.fillStyle = "#000"; pg.fillRect(0, 0, pv.width, pv.height); pg.drawImage(c, 0, 0, pv.width, Math.min(pv.height, pv.width * c.height / c.width)); }
+// A barra do nome tem ~3% da altura do ecrã. Se a área escolhida for maior, procura-se a faixa da barra
+// (de baixo para cima) e guarda-se a que funcionou para a tentar primeiro na leitura seguinte.
+function nameStrips() {
+  const a = areaOf("ocr"), h = 0.034, out = [];
+  if (a.B - a.T <= h * 1.4) return [a];
+  for (let b = a.B; b - h >= a.T - 0.001; b -= 0.011) out.push({ ...a, T: Math.max(a.T, b - h), B: b });
+  const k = ocr.strip != null && out[ocr.strip] ? ocr.strip : -1;
+  return k >= 0 ? [out[k], ...out.filter((_, i) => i !== k)] : out;
+}
 async function readName(v, W, H) {
-  const P = prepare(v, W, H, "ocr", sh => 90 / sh);
+  // ampliar em função da altura do ecrã (o texto do jogo cresce com a resolução), não da área escolhida: ~40 px de letra
+  const strips = nameStrips(), all = (() => { const a = areaOf("ocr"), h = 0.034; return a.B - a.T <= h * 1.4 ? null : a; })();
   let txt = "", shown = null;
-  for (const mode of ["gray", "bin", "inv"]) {
-    const c = variant(P, mode), { data } = await ocr.worker.recognize(c);
-    txt = txt || (data.text || "").trim(); shown = shown || c;
-    const z = matchZone(data.text || ""); if (z >= 0) { showPrev(c); return { z, txt }; }
+  for (const area of strips) {
+    const P = prepare(v, W, H, area, () => Math.min(5, Math.max(1.5, 2800 / H)));
+    for (const mode of ["gray", "bin", "inv"]) {
+      const c = variant(P, mode), { data } = await ocr.worker.recognize(c);
+      txt = txt || (data.text || "").trim(); shown = shown || c;
+      const z = matchZone(data.text || "");
+      if (z >= 0) {
+        showPrev(c);
+        if (all) { const hh = 0.034, list = []; for (let b = all.B; b - hh >= all.T - 0.001; b -= 0.011) list.push(b); ocr.strip = list.findIndex(b => Math.abs(b - area.B) < 1e-6); }
+        return { z, txt };
+      }
+    }
   }
   showPrev(shown); return { z: -1, txt };
 }
 // chat: "[Sistema] Entrando em Willowsigh Marsh" (ou "Entering ..."): a última linha que for uma zona
 async function readChat(v, W, H) {
-  const P = prepare(v, W, H, "chat", () => 2.5), { data } = await ocr.chatWorker.recognize(variant(P, "gray"));
+  const P = prepare(v, W, H, areaOf("chat"), () => 2.5), { data } = await ocr.chatWorker.recognize(variant(P, "gray"));
   const lines = (data.text || "").split("\n").filter(l => /entrando|entering|entrou/i.test(l));
   for (let i = lines.length - 1; i >= 0; i--) {
     const z = matchZone(lines[i].replace(/^.*?(entrando em|entering|entrou em)/i, ""), 0.75);
