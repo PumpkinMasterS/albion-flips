@@ -60,6 +60,10 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:190px}
 .kpi b{display:block;font:800 22px Cinzel,serif;margin:2px 0}
 .note{background:var(--parch);color:var(--ink);border-radius:6px;padding:10px 12px;font-size:13px;border:1px solid #b89a5e}
 .hide{display:none}
+.sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+details.more{margin-top:10px}details.more summary{cursor:pointer;color:var(--gold);font-size:13px}
+.hint{margin-top:10px;font-size:13px;color:var(--mut)}.hint b{color:var(--fg)}
+.it .tier{margin-left:4px;vertical-align:1px}
 .rgrid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:12px;align-items:start}.rgrid .frame{margin-top:0}
 @media (max-width:900px){.rgrid{grid-template-columns:1fr}}
 .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:end}.chips .btn2{font-size:13px}
@@ -106,21 +110,28 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
   <div class="bar">
     <label id="fFrom">Cidade de compra<select id="from"></select></label>
     <label id="fTo">Cidade de venda<select id="to"></select></label>
-    <label id="fBuy">Compra<select id="buyMode"><option value="order">Buy order</option><option value="instant">Compra imediata</option></select></label>
-    <label id="fSell">Venda<select id="sellMode"><option value="order">Sell order</option><option value="instant">Venda imediata</option></select></label>
-    <label>Idade máx. (h)<input id="age" type="number" value="6" min="1"></label>
-    <label>Vendas/dia mín.<input id="minVol" type="number" value="5" min="0"></label>
-    <label>Preço máx./un.<input id="maxBuy" type="number" placeholder="sem limite"></label>
-    <label class="tripf" title="Abre o inventário com a montaria e a bolsa equipadas: é o peso máximo menos o que já levas">Carga livre (kg)<input id="cap" type="number" placeholder="ex.: 2500"></label>
-    <label class="tripf">Prata para investir<input id="silver" type="number" placeholder="sem limite"></label>
-    <label>Procurar<input id="q" placeholder="nome ou ID"></label>
+    <label id="fBuy">Compra<select id="buyMode"><option value="order">Buy order</option><option value="instant">Imediata</option></select></label>
+    <label id="fSell">Venda<select id="sellMode"><option value="order">Sell order</option><option value="instant">Imediata</option></select></label>
+    <span class="sep tripf"></span>
+    <label class="tripf" title="A carga máxima dos stats (com montaria e bolsa equipadas) menos o que já levas">Carga livre (kg)<input id="cap" type="number" placeholder="ex.: 2500"></label>
+    <label class="tripf">Prata a investir<input id="silver" type="number" placeholder="sem limite"></label>
+    <span style="flex:1"></span>
+    <label>Procurar<input id="q" placeholder="item"></label>
+    <label>Ordenar<select id="sortBy"><option value="auto">Melhor primeiro</option><option value="day">Lucro/dia</option><option value="trip">Lucro/viagem</option><option value="profit">Lucro/un.</option><option value="roi">ROI</option><option value="vol">Vendas/dia</option></select></label>
   </div>
-  <div id="hint" class="note" style="margin-top:12px"></div>
+  <details class="more">
+    <summary>Mais filtros</summary>
+    <div class="bar" style="margin-top:8px">
+      <label>Dados com menos de (h)<input id="age" type="number" value="6" min="1"></label>
+      <label>Vendas/dia mín.<input id="minVol" type="number" value="5" min="0"></label>
+      <label>Preço máx./un.<input id="maxBuy" type="number" placeholder="sem limite"></label>
+    </div>
+  </details>
+  <div id="hint" class="hint"></div>
 </div>
 <div class="frame wrap"><table id="tOpp"><thead><tr>
-  <th data-k="name">Item</th><th data-k="tier">Tier</th><th data-k="route">Rota</th><th data-k="buy">Compra</th><th data-k="sell">Venda</th>
-  <th data-k="profit">Lucro/un.</th><th data-k="roi">ROI</th><th data-k="vol">Vendas/dia</th>
-  <th data-k="day">Lucro/dia</th><th data-k="w" class="trip">Peso</th><th data-k="units" class="trip">Un./viagem</th><th data-k="trip" class="trip">Lucro/viagem</th><th data-k="ageH">Idade</th><th></th></tr></thead><tbody></tbody></table></div>
+  <th data-k="name">Item</th><th data-k="route" class="trip">Rota</th><th data-k="buy">Compra</th><th data-k="sell">Venda</th>
+  <th data-k="profit">Lucro/un.</th><th data-k="vol">Vendas/dia</th><th data-k="day">Lucro/dia</th><th data-k="trip" class="trip">Por viagem</th><th></th></tr></thead><tbody></tbody></table></div>
 </section>
 
 <section id="pRoute" class="hide">
@@ -228,7 +239,7 @@ let tabNow = "city";
 const sel = (el, opts) => { el.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(""); };
 const ALL = [["*", "Todas"], ...CITIES.map(c => [c, c])];
 const prefs = store.get("prefs2", {});
-const PREF_KEYS = ["prem", "age", "minVol", "maxBuy", "cap", "silver"];
+const PREF_KEYS = ["prem", "age", "minVol", "maxBuy", "cap", "silver", "sortBy"];
 const WEIGHTS = __WEIGHTS__; // kg por unidade
 const weightOf = id => WEIGHTS[id] ?? WEIGHTS[id.split("@")[0]] ?? null;
 for (const k of PREF_KEYS) if (prefs[k] != null) $("#" + k).value = prefs[k];
@@ -240,15 +251,15 @@ const tabState = Object.assign({
 const savePrefs = () => store.set("prefs2", { ...Object.fromEntries(PREF_KEYS.map(k => [k, $("#" + k).value])), tabs: tabState });
 
 const HINTS = {
-  city: "Põe uma <b>buy order</b> 1 prata acima da melhor e, quando encher, uma <b>sell order</b> 1 prata abaixo da mais barata, tudo na mesma cidade. Sem viagens nem risco de morrer.",
-  trans: "Compra numa cidade e transporta para outra. As rotas para <b>Caerleon</b> passam por zonas vermelhas: podes ser morto e perder a carga. Leva montaria de carga e não arrisques mais do que podes perder.",
-  bm: "Compra nas cidades e vende <b>imediatamente</b> às buy orders do <b>Mercado Negro</b> (em Caerleon). O Mercado Negro só compra, não vende a jogadores. Equipamento tem de ser da qualidade certa (aqui: Normal). As buy orders do Mercado Negro esgotam depressa: confirma antes de comprar muito.",
-};
+  city: "Buy order 1 prata acima da melhor; quando encher, sell order 1 prata abaixo da mais barata. Tudo na mesma cidade, sem viagens.",
+  trans: "Compra numa cidade e vende noutra. <b>Caerleon</b> fica no meio de zonas vermelhas: podes perder a carga.",
+  bm: "Compra nas cidades e vende logo ao <b>Mercado Negro</b> (Caerleon), que só compra. Equipamento em qualidade Normal; as ordens dele esgotam depressa.",
+}
 function applyTab() {
   const s = tabState[tabNow];
   $("#fFrom").classList.toggle("hide", false);
   $("#fTo").classList.toggle("hide", tabNow !== "trans");
-  $("#fSell").classList.toggle("hide", tabNow === "bm");
+  $("#fSell").classList.toggle("hide", tabNow !== "trans"); // na cidade é sempre sell order; no Mercado Negro é sempre imediata
   sel($("#from"), tabNow === "city" ? ALL : ALL);
   sel($("#to"), ALL);
   $("#fFrom").firstChild.textContent = tabNow === "city" ? "Cidade" : "Cidade de compra";
@@ -256,13 +267,13 @@ function applyTab() {
   $("#buyMode").value = s.buyMode; if (s.sellMode) $("#sellMode").value = s.sellMode;
   $("#buyMode").disabled = false; $("#sellMode").disabled = tabNow === "city";
   if (tabNow === "city") $("#sellMode").value = "order";
-  $("#hint").innerHTML = HINTS[tabNow] + (tabNow === "city" ? "" : " <br>Com a <b>carga livre</b> preenchida, vês quantas unidades cabem por viagem (limitado também pela prata e pelas vendas de um dia) e o lucro de cada viagem.");
+  $("#hint").innerHTML = "ⓘ " + HINTS[tabNow] + (tabNow === "city" ? "" : " Preenche a <b>carga livre</b> para ver o lucro por viagem.");
   document.body.classList.toggle("notrip", tabNow === "city");
-  if (tabNow !== "city" && sortK === "day" && +$("#cap").value) sortK = "trip";
+  applySortBy();
   render();
 }
 for (const id of ["from", "to", "buyMode", "sellMode"]) $("#" + id).onchange = () => { tabState[tabNow][id] = $("#" + id).value; savePrefs(); render(); };
-for (const id of PREF_KEYS.concat("q")) $("#" + id).oninput = () => { savePrefs(); render(); renderTrades(); };
+for (const id of PREF_KEYS.concat("q")) if (id !== "sortBy") $("#" + id).oninput = () => { savePrefs(); if (id === "cap") applySortBy(); render(); renderTrades(); };
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
   const t = b.dataset.tab;
@@ -349,8 +360,13 @@ async function loadVolumes(rows) {
   }
 }
 let sortK = "day", sortDir = -1, rendering = false;
+function applySortBy() {
+  const v = $("#sortBy").value;
+  sortK = v !== "auto" ? v : tabNow !== "city" && +$("#cap").value ? "trip" : "day"; sortDir = -1;
+}
+$("#sortBy").onchange = () => { applySortBy(); savePrefs(); render(false); };
 async function render(fetchVol = true) {
-  if (!loadedAt) { $("#tOpp tbody").innerHTML = `<tr><td colspan="14" class="mut" style="text-align:center;padding:30px">Ainda sem dados. Carrega em «Atualizar mercado».</td></tr>`; return; }
+  if (!loadedAt) { $("#tOpp tbody").innerHTML = `<tr><td colspan="9" class="mut" style="text-align:center;padding:30px">Ainda sem dados. Carrega em «Atualizar mercado».</td></tr>`; return; }
   const minVol = +$("#minVol").value || 0, maxBuy = +$("#maxBuy").value || Infinity, q = $("#q").value.trim().toLowerCase();
   const s = tabState[tabNow];
   let rows = candidates().filter(r => r.buy <= maxBuy && (!q || nameOf(r.id).toLowerCase().includes(q) || r.id.toLowerCase().includes(q)));
@@ -373,19 +389,19 @@ async function render(fetchVol = true) {
     .sort((a, b) => ((a[sortK] ?? -Infinity) > (b[sortK] ?? -Infinity) ? 1 : -1) * sortDir).slice(0, 300);
   document.querySelectorAll("#tOpp th").forEach(th => th.classList.toggle("on", th.dataset.k === sortK));
   const buyL = s.buyMode === "order" ? "buy order" : "imediata", sellL = r => r.sellMode === "order" ? "sell order" : "imediata";
+  const sub = t => `<small class="mut" style="display:block">${t}</small>`;
   $("#tOpp tbody").innerHTML = rows.map(r => `<tr>
-    <td class="item"><div class="it"><img loading="lazy" src="${icon(r.id)}" alt=""><div>${esc(r.name)}<small>${esc(r.id)}</small></div></div></td>
-    <td><span class="tier t${r.tier[0]}">${r.tier}</span></td>
-    <td>${r.from === r.to ? `<span class="city">${esc(r.from)}</span>` : `<span class="city">${esc(r.from)}</span><span class="arrow">➜</span><span class="city">${esc(cityLabel(r.to))}</span>`}</td>
-    <td>${fmt(r.buy)}<small class="mut" style="display:block">${buyL}</small></td>
-    <td>${fmt(r.sell)}<small class="mut" style="display:block">${sellL(r)}<br>média 7d ${fmt(r.avg)}</small></td>
-    <td class="pos"><b>${fmt(r.profit)}</b></td><td>${(r.roi * 100).toFixed(0)}%</td><td>${fmt(r.vol)}</td>
+    <td class="item"><div class="it"><img loading="lazy" src="${icon(r.id)}" alt=""><div>${esc(r.name)} <span class="tier t${r.tier[0]}">${r.tier}</span><small title="${esc(r.id)}">dados de há ${r.ageH.toFixed(1)} h</small></div></div></td>
+    <td class="trip">${r.from === r.to ? `<span class="city">${esc(r.from)}</span>` : `<span class="city">${esc(r.from)}</span><span class="arrow">➜</span><span class="city">${esc(cityLabel(r.to))}</span>`}</td>
+    <td>${fmt(r.buy)}${sub(buyL)}</td>
+    <td>${fmt(r.sell)}${sub(`${sellL(r)} · média ${fmt(r.avg)}`)}</td>
+    <td class="pos"><b>${fmt(r.profit)}</b>${sub(`ROI ${(r.roi * 100).toFixed(0)}%`)}</td>
+    <td>${fmt(r.vol)}</td>
     <td class="gold">${fmt(r.day)}</td>
-    <td class="trip">${r.w == null ? "—" : r.w.toLocaleString("pt-PT") + " kg"}</td><td class="trip">${fmt(r.units)}</td><td class="trip gold"><b>${fmt(r.trip)}</b></td>
-    <td class="mut">${r.ageH.toFixed(1)}h</td>
+    <td class="trip">${r.trip == null ? `<span class="mut">${r.w == null ? "sem peso" : "põe a carga"}</span>` : `<b class="gold">${fmt(r.trip)}</b>${sub(`${fmt(r.units)} un. × ${r.w.toLocaleString("pt-PT")} kg`)}`}</td>
     <td class="acts"><button class="btn2" data-buy="${esc(r.id)}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button>
       ${r.from !== r.to && r.from !== "Brecilien" && r.to !== "Brecilien" ? `<button class="btn2" data-route-from="${esc(r.from)}" data-route-to="${esc(r.to === BM ? "Caerleon" : r.to)}">Rota</button>` : ""}</td></tr>`).join("")
-    || `<tr><td colspan="14" class="mut" style="text-align:center;padding:30px">Nada com lucro com estes filtros.</td></tr>`;
+    || `<tr><td colspan="9" class="mut" style="text-align:center;padding:30px">Nada com lucro com estes filtros.</td></tr>`;
   $("#status").textContent = `${rows.length} oportunidades · mercado lido às ${new Date(loadedAt).toLocaleTimeString("pt-PT")}`;
 }
 document.querySelectorAll("#tOpp th[data-k]").forEach(th => th.onclick = () => { sortDir = sortK === th.dataset.k ? -sortDir : -1; sortK = th.dataset.k; render(false); });
