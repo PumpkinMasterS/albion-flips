@@ -124,6 +124,22 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
   <datalist id="zl"></datalist>
   <div id="rSummary" class="sub" style="margin-top:10px"></div>
 </div>
+<div class="frame">
+  <h2>Leitura automática da zona</h2>
+  <div class="sub">Lê o nome da zona por baixo do minimapa (só vê o ecrã, não mexe no jogo) e avança a rota sozinho. Se saíres da rota, recalcula a partir de onde estás.
+    Carrega em «Ligar», escolhe a janela <b>Albion Online Client</b> e partilha.</div>
+  <div class="bar" style="margin-top:10px">
+    <button class="btn" id="ocrBtn">Ligar leitura</button>
+    <label>Área: esquerda %<input id="ocrL" type="number" step="0.5" value="81.5"></label>
+    <label>direita %<input id="ocrR" type="number" step="0.5" value="96.5"></label>
+    <label>topo %<input id="ocrT" type="number" step="0.5" value="96.2"></label>
+    <label>fundo %<input id="ocrB" type="number" step="0.5" value="99.2"></label>
+  </div>
+  <div class="bar" style="margin-top:10px;align-items:center">
+    <canvas id="ocrPrev" width="300" height="40" style="background:#000;border:1px solid var(--line);border-radius:4px;max-width:100%"></canvas>
+    <div id="ocrStatus" class="sub">Desligada.</div>
+  </div>
+</div>
 <div class="frame"><ol id="rList" class="route"></ol></div>
 <details class="frame">
   <summary class="gold" style="cursor:pointer;font-family:Cinzel,serif">Acertar as direções com o teu minimapa</summary>
@@ -397,7 +413,8 @@ const ZTYPE = { 0: "Cidade inicial", 1: "Cidade", 2: "Azul", 3: "Amarela", 4: "V
 const COMPASS = ["E", "NE", "N", "NO", "O", "SO", "S", "SE"];
 $("#zl").innerHTML = ZONES.map(z => `<option value="${esc(z[0])}">`).join("");
 const zoneIdx = name => { const n = (name || "").trim().toLowerCase(); return ZONES.findIndex(z => z[0].toLowerCase() === n); };
-let cal = store.get("cal", { mirror: true, rot: 0 });
+// confirmado no jogo: Thetford Portal → Widemoor Shore = "Saída Nordeste" (sem espelho, sem rotação)
+let cal = store.get("cal2", { mirror: false, rot: 0 });
 const rState = store.get("route", {});
 if (rState.from) $("#rFrom").value = rState.from; if (rState.to) $("#rTo").value = rState.to; if (rState.mode) $("#rMode").value = rState.mode;
 let routeStep = rState.step || 0;
@@ -483,15 +500,15 @@ $("#rOverlay").onclick = async () => {
 function renderCal() {
   const a = zoneIdx($("#cZone").value);
   if (a < 0) { $("#cRows").innerHTML = ""; return; }
-  const obs = store.get("calObs", {});
+  const obs = store.get("calObs2", {});
   $("#cRows").innerHTML = ZONES[a][5].map(v => `<label>${esc(ZONES[v][0])}<select data-v="${v}"><option value="">—</option>${COMPASS.map((c, k) => `<option value="${k}" ${obs[a + ">" + v] == k ? "selected" : ""}>${c}</option>`).join("")}</select></label>`).join("");
   $("#cRes").textContent = `Atual: ${cal.mirror ? "espelhado" : "normal"}, rodado ${cal.rot * 45}°.`;
 }
 $("#cZone").onchange = renderCal;
 $("#cRows").onchange = e => {
-  const a = zoneIdx($("#cZone").value), obs = store.get("calObs", {});
+  const a = zoneIdx($("#cZone").value), obs = store.get("calObs2", {});
   const v = e.target.dataset.v; if (e.target.value === "") delete obs[a + ">" + v]; else obs[a + ">" + v] = +e.target.value;
-  store.set("calObs", obs);
+  store.set("calObs2", obs);
   const pairs = Object.entries(obs).map(([k, c]) => [...k.split(">").map(Number), c]);
   if (pairs.length >= 2) {
     let best = null;
@@ -499,11 +516,84 @@ $("#cRows").onchange = e => {
       const err = pairs.reduce((s, [x, y, c]) => { const d = Math.abs(angle(x, y, { mirror, rot }) - c * 45) % 360; return s + Math.min(d, 360 - d); }, 0);
       if (!best || err < best.err) best = { mirror, rot, err };
     }
-    cal = { mirror: best.mirror, rot: best.rot }; store.set("cal", cal); renderRoute();
+    cal = { mirror: best.mirror, rot: best.rot }; store.set("cal2", cal); renderRoute();
   }
   renderCal();
 };
 renderCal();
+
+// ---------- leitura automática do nome da zona (captura de ecrã + OCR) ----------
+const OCR_KEYS = ["ocrL", "ocrR", "ocrT", "ocrB"];
+const ocrPrefs = store.get("ocr", {});
+for (const k of OCR_KEYS) { if (ocrPrefs[k] != null) $("#" + k).value = ocrPrefs[k]; $("#" + k).oninput = () => store.set("ocr", Object.fromEntries(OCR_KEYS.map(x => [x, $("#" + x).value]))); }
+const ZNORM = ZONES.map(z => z[0].toLowerCase().replace(/[^a-z' ]/g, ""));
+function lev(a, b) {
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
+  return prev[n];
+}
+function matchZone(text) {
+  const t = text.toLowerCase().replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim();
+  let best = -1, bestS = 0;
+  ZNORM.forEach((z, i) => {
+    if (z.length > t.length + 3) return;
+    for (let p = 0; p <= Math.max(0, t.length - z.length); p++) {
+      const s = 1 - lev(z, t.substr(p, z.length)) / z.length;
+      if (s > bestS || (s === bestS && best >= 0 && z.length > ZNORM[best].length)) { bestS = s; best = i; }
+    }
+  });
+  return bestS >= 0.8 ? best : -1;
+}
+let ocr = null; // { stream, video, worker, last, hits }
+async function ocrTick() {
+  if (!ocr) return;
+  const v = ocr.video, W = v.videoWidth, H = v.videoHeight;
+  if (W && H) {
+    const L = +$("#ocrL").value / 100, R = +$("#ocrR").value / 100, T = +$("#ocrT").value / 100, B = +$("#ocrB").value / 100;
+    const sx = W * L, sy = H * T, sw = Math.max(1, W * (R - L)), sh = Math.max(1, H * (B - T)), k = 60 / sh, pad = 24;
+    const c = ocr.canvas; c.width = sw * k + 2 * pad; c.height = sh * k + 2 * pad;
+    const g = c.getContext("2d", { willReadFrequently: true }); g.imageSmoothingQuality = "high";
+    g.fillStyle = "#000"; g.fillRect(0, 0, c.width, c.height); g.drawImage(v, sx, sy, sw, sh, pad, pad, sw * k, sh * k);
+    const img = g.getImageData(0, 0, c.width, c.height), d = img.data;
+    // só tons de cinzento; o Tesseract binariza sozinho (a barra é semitransparente, o fundo muda)
+    for (let i = 0; i < d.length; i += 4) { const y = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; d[i] = d[i + 1] = d[i + 2] = y; }
+    g.putImageData(img, 0, 0);
+    const pv = $("#ocrPrev"), pg = pv.getContext("2d"); pg.fillStyle = "#000"; pg.fillRect(0, 0, pv.width, pv.height);
+    pg.drawImage(c, 0, 0, pv.width, Math.min(pv.height, pv.width * c.height / c.width));
+    try {
+      const { data } = await ocr.worker.recognize(c);
+      const z = matchZone(data.text || "");
+      if (z >= 0) {
+        ocr.hits = z === ocr.last ? ocr.hits + 1 : 1; ocr.last = z;
+        $("#ocrStatus").innerHTML = `A ler: <b class="gold">${esc(ZONES[z][0])}</b>`;
+        if (ocr.hits === 2) onZoneSeen(z);
+      } else $("#ocrStatus").textContent = `Não reconheci («${(data.text || "").trim().slice(0, 40)}»). Ajusta a área até o nome aparecer no quadro preto.`;
+    } catch (e) { $("#ocrStatus").textContent = "Erro no OCR: " + e.message; }
+  }
+  (pip ? pip.window : window).setTimeout(ocrTick, 1500);
+}
+function onZoneSeen(z) {
+  if (!route) return;
+  const at = route.indexOf(z, routeStep) >= 0 ? route.indexOf(z, routeStep) : route.indexOf(z);
+  if (at >= 0) { if (at !== routeStep) { routeStep = at; renderRoute(); } return; }
+  $("#rFrom").value = ZONES[z][0]; routeStep = 0; renderRoute();
+  $("#ocrStatus").innerHTML += " · <span class='neg'>fora da rota, recalculada</span>";
+}
+$("#ocrBtn").onclick = async () => {
+  if (ocr) { ocr.stream.getTracks().forEach(t => t.stop()); ocr.worker.terminate(); ocr = null; $("#ocrBtn").textContent = "Ligar leitura"; $("#ocrStatus").textContent = "Desligada."; return; }
+  try {
+    $("#ocrStatus").textContent = "A preparar o leitor de texto…";
+    if (!window.Tesseract) await new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"; s.onload = ok; s.onerror = ko; document.head.append(s); });
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 2 }, audio: false });
+    const worker = await Tesseract.createWorker("eng");
+    await worker.setParameters({ tessedit_pageseg_mode: "7", tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' " });
+    const video = document.createElement("video"); video.muted = true; video.srcObject = stream; await video.play();
+    ocr = { stream, video, worker, canvas: document.createElement("canvas"), last: -1, hits: 0 };
+    stream.getVideoTracks()[0].onended = () => { if (ocr) $("#ocrBtn").click(); };
+    $("#ocrBtn").textContent = "Desligar leitura"; ocrTick();
+  } catch (e) { $("#ocrStatus").textContent = "Não foi possível ligar: " + (e.message || e); }
+};
 
 applyTab(); renderTrades();
 </script>
