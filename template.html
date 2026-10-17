@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Albion Flips</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--fg:#1d1c1a;--mut:#6b6862;--line:#e3e0da;--acc:#9a5b13;--pos:#1f7a3a;--neg:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#161513;--card:#201f1c;--fg:#ecebe7;--mut:#9b978f;--line:#34322e;--acc:#e0a050;--pos:#5cc27a;--neg:#ff7b72}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1200px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:0 0 10px}
+.mut{color:var(--mut)}.pos{color:var(--pos)}.neg{color:var(--neg)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin:14px 0}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:3px}
+input,select,button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+input[type=number]{width:110px}
+button{cursor:pointer}button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+.tabs button{border-radius:6px 6px 0 0}.tabs button.on{background:var(--card);border-bottom-color:var(--card);font-weight:600}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{font-size:12px;color:var(--mut);cursor:pointer;user-select:none;position:sticky;top:0;background:var(--card)}
+td:first-child,th:first-child{text-align:left;white-space:normal;min-width:180px}
+.kpis{display:flex;flex-wrap:wrap;gap:12px}.kpi{flex:1;min-width:140px}.kpi b{display:block;font-size:20px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Albion Flips</h1>
+<div class="mut">Buy order → sell order na mesma cidade. Dados: Albion Online Data Project (Europa). Preços enviados por jogadores, podem estar atrasados.</div>
+
+<div class="tabs" style="margin-top:14px">
+  <button id="tabFlips" class="on">Oportunidades</button>
+  <button id="tabTrades">As minhas trocas</button>
+</div>
+
+<section id="pFlips">
+<div class="card">
+  <div class="bar">
+    <label>Cidade<select id="city"></select></label>
+    <label>Premium<select id="prem"><option value="1">Sim (4%)</option><option value="0">Não (8%)</option></select></label>
+    <label>Idade máx. dados (h)<input id="age" type="number" value="6" min="1"></label>
+    <label>Vendas/dia mín.<input id="minVol" type="number" value="10" min="0"></label>
+    <label>Investimento máx./un.<input id="maxBuy" type="number" placeholder="sem limite"></label>
+    <label>Procurar<input id="q" placeholder="nome ou ID"></label>
+    <button class="pri" id="go">Atualizar preços</button>
+  </div>
+  <div id="status" class="mut" style="margin-top:8px">Carrega em «Atualizar preços».</div>
+</div>
+<div class="card wrap"><table id="tFlips"><thead><tr>
+  <th data-k="name">Item</th><th data-k="tier">Tier</th><th data-k="buy">Buy order</th><th data-k="sell">Sell order</th>
+  <th data-k="profit">Lucro/un.</th><th data-k="roi">ROI</th><th data-k="vol">Vendas/dia</th><th data-k="avg">Preço médio 7d</th>
+  <th data-k="day">Lucro/dia est.</th><th data-k="ageH">Idade</th><th></th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section id="pTrades" class="hide">
+<div class="card kpis" id="kpis"></div>
+<div class="card">
+  <h2>Registar compra</h2>
+  <div class="bar">
+    <label>Item (ID ou nome)<input id="tItem" list="dl" style="width:280px"></label>
+    <label>Quantidade<input id="tQty" type="number" value="1" min="1"></label>
+    <label>Preço de compra/un.<input id="tBuy" type="number"></label>
+    <label>Cidade<select id="tCity"></select></label>
+    <button class="pri" id="tAdd">Adicionar</button>
+    <span style="flex:1"></span>
+    <button id="exp">Exportar</button><button id="imp">Importar</button>
+  </div>
+  <datalist id="dl"></datalist>
+</div>
+<div class="card wrap"><table id="tTrades"><thead><tr>
+  <th>Item</th><th>Data</th><th>Qtd.</th><th>Compra/un.</th><th>Mercado agora</th><th>Venda/un.</th><th>Lucro</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table></div>
+</section>
+</main>
+
+<script>
+const NAMES = __NAMES__;
+const HOST = "https://europe.albion-online-data.com";
+const CITIES = ["Thetford","Bridgewatch","Caerleon","Fort Sterling","Lymhurst","Martlock","Brecilien"];
+const SETUP = 0.025;
+const $ = s => document.querySelector(s);
+const fmt = n => n == null ? "—" : Math.round(n).toLocaleString("pt-PT");
+const tierOf = id => { const t = id.match(/^T(\d)/), e = id.match(/@(\d)/); return t ? t[1] + "." + (e ? e[1] : "0") : "—"; };
+const nameOf = id => NAMES[id] || id;
+const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+                set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const tax = () => $("#prem").value === "1" ? 0.04 : 0.08;
+const net = (sell, buy) => sell * (1 - tax() - SETUP) - buy * (1 + SETUP);
+const ageH = s => (Date.now() - Date.parse(s + "Z")) / 36e5;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+for (const c of CITIES) { $("#city").add(new Option(c, c)); $("#tCity").add(new Option(c, c)); }
+const prefs = store.get("prefs", {});
+for (const k of ["city", "prem", "age", "minVol", "maxBuy"]) if (prefs[k] != null) $("#" + k).value = prefs[k];
+const savePrefs = () => store.set("prefs", Object.fromEntries(["city", "prem", "age", "minVol", "maxBuy"].map(k => [k, $("#" + k).value])));
+
+function batches(ids, max = 3500) {
+  const out = []; let cur = [], len = 0;
+  for (const i of ids) { if (len + i.length + 1 > max) { out.push(cur); cur = []; len = 0; } cur.push(i); len += i.length + 1; }
+  if (cur.length) out.push(cur); return out;
+}
+async function getJSON(url) {
+  for (let i = 0; i < 4; i++) {
+    try { const r = await fetch(url); if (r.ok) return r.json(); if (r.status === 429) await sleep(15000); }
+    catch { await sleep(3000); }
+  }
+  return [];
+}
+async function prices(ids, city) {
+  const out = [], bs = batches(ids);
+  for (let i = 0; i < bs.length; i++) {
+    $("#status").textContent = `A ler preços… ${i + 1}/${bs.length}`;
+    out.push(...await getJSON(`${HOST}/api/v2/stats/prices/${bs[i].join(",")}?locations=${encodeURIComponent(city)}&qualities=1`));
+    await sleep(350);
+  }
+  return out;
+}
+async function history(ids, city) {
+  const vol = {}, bs = batches(ids);
+  for (let i = 0; i < bs.length; i++) {
+    $("#status").textContent = `A ler volume de vendas… ${i + 1}/${bs.length}`;
+    for (const h of await getJSON(`${HOST}/api/v2/stats/history/${bs[i].join(",")}?locations=${encodeURIComponent(city)}&qualities=1&time-scale=24`)) {
+      const pts = h.data.filter(p => ageH(p.timestamp) <= 168), n = pts.reduce((a, p) => a + p.item_count, 0);
+      if (n) vol[h.item_id] = { vol: n / 7, avg: pts.reduce((a, p) => a + p.avg_price * p.item_count, 0) / n };
+    }
+    await sleep(350);
+  }
+  return vol;
+}
+
+let flips = [], sortK = "day", sortDir = -1;
+$("#go").onclick = async () => {
+  savePrefs(); $("#go").disabled = true;
+  const city = $("#city").value, maxAge = +$("#age").value;
+  try {
+    const cand = [];
+    for (const d of await prices(Object.keys(NAMES), city)) {
+      if (!d.sell_price_min || !d.buy_price_max || ageH(d.sell_price_min_date) > maxAge || ageH(d.buy_price_max_date) > maxAge) continue;
+      const buy = d.buy_price_max + 1, sell = d.sell_price_min - 1, profit = net(sell, buy);
+      if (profit > 0 && profit / buy < 3) cand.push({ id: d.item_id, buy, sell, ageH: Math.max(ageH(d.sell_price_min_date), ageH(d.buy_price_max_date)) });
+    }
+    const vol = await history(cand.map(c => c.id), city);
+    flips = cand.filter(c => vol[c.id] && c.sell <= vol[c.id].avg * 1.2).map(c => ({ ...c, ...vol[c.id], name: nameOf(c.id), tier: tierOf(c.id) }));
+    store.set("flips", { city, at: Date.now(), flips });
+    $("#status").textContent = `${flips.length} oportunidades em ${city} · atualizado ${new Date().toLocaleTimeString("pt-PT")}`;
+    render();
+  } finally { $("#go").disabled = false; }
+};
+function render() {
+  const minVol = +$("#minVol").value || 0, maxBuy = +$("#maxBuy").value || Infinity, q = $("#q").value.trim().toLowerCase();
+  const rows = flips.map(f => { const profit = net(f.sell, f.buy); return { ...f, profit, roi: profit / f.buy, day: profit * Math.min(f.vol * 0.1, 50) }; })
+    .filter(f => f.profit > 0 && f.vol >= minVol && f.buy <= maxBuy && (!q || f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q)))
+    .sort((a, b) => (a[sortK] > b[sortK] ? 1 : -1) * sortDir).slice(0, 300);
+  $("#tFlips tbody").innerHTML = rows.map(f => `<tr>
+    <td>${f.name}<div class="mut" style="font-size:11px">${f.id}</div></td><td>${f.tier}</td><td>${fmt(f.buy)}</td><td>${fmt(f.sell)}</td>
+    <td class="pos">${fmt(f.profit)}</td><td>${(f.roi * 100).toFixed(0)}%</td><td>${fmt(f.vol)}</td><td>${fmt(f.avg)}</td>
+    <td>${fmt(f.day)}</td><td>${f.ageH.toFixed(1)}h</td><td><button data-buy="${f.id}" data-p="${f.buy}">Comprei</button></td></tr>`).join("");
+}
+document.querySelectorAll("#tFlips th[data-k]").forEach(th => th.onclick = () => { sortDir = sortK === th.dataset.k ? -sortDir : -1; sortK = th.dataset.k; render(); });
+for (const id of ["minVol", "maxBuy", "q", "prem"]) $("#" + id).oninput = () => { savePrefs(); render(); renderTrades(); };
+$("#tFlips").onclick = e => {
+  const b = e.target.closest("button[data-buy]"); if (!b) return;
+  tab("trades"); $("#tItem").value = b.dataset.buy; $("#tBuy").value = b.dataset.p; $("#tCity").value = $("#city").value; $("#tQty").focus();
+};
+
+// ---- As minhas trocas ----
+let trades = store.get("trades", []), market = {};
+const saveTrades = () => store.set("trades", trades);
+$("#dl").innerHTML = Object.entries(NAMES).map(([id, n]) => `<option value="${id}">${n} (${tierOf(id)})</option>`).join("");
+function resolveId(v) { v = v.trim(); if (NAMES[v]) return v; const hit = Object.entries(NAMES).find(([, n]) => n.toLowerCase() === v.toLowerCase()); return hit ? hit[0] : null; }
+$("#tAdd").onclick = () => {
+  const id = resolveId($("#tItem").value), qty = +$("#tQty").value, buy = +$("#tBuy").value;
+  if (!id || !qty || !buy) return alert("Escolhe um item da lista e preenche quantidade e preço.");
+  trades.unshift({ id, qty, buy, city: $("#tCity").value, at: Date.now(), sell: null });
+  saveTrades(); $("#tItem").value = ""; $("#tBuy").value = ""; renderTrades(); refreshMarket();
+};
+$("#tTrades").onclick = e => {
+  const i = +e.target.dataset.i; if (!e.target.dataset.act) return;
+  if (e.target.dataset.act === "sold") { const v = prompt("Preço de venda por unidade?", market[trades[i].id + "|" + trades[i].city] || ""); if (v) trades[i].sell = +v; }
+  if (e.target.dataset.act === "del" && confirm("Apagar esta troca?")) trades.splice(i, 1);
+  saveTrades(); renderTrades();
+};
+async function refreshMarket() {
+  const open = trades.filter(t => t.sell == null);
+  for (const city of new Set(open.map(t => t.city)))
+    for (const d of await getJSON(`${HOST}/api/v2/stats/prices/${[...new Set(open.filter(t => t.city === city).map(t => t.id))].join(",")}?locations=${encodeURIComponent(city)}&qualities=1`))
+      if (d.sell_price_min) market[d.item_id + "|" + city] = d.sell_price_min;
+  renderTrades();
+}
+function renderTrades() {
+  let done = 0, openCost = 0, openVal = 0, n = 0;
+  $("#tTrades tbody").innerHTML = trades.map((t, i) => {
+    const m = market[t.id + "|" + t.city], sold = t.sell != null;
+    const p = sold ? net(t.sell, t.buy) * t.qty : m ? net(m - 1, t.buy) * t.qty : null;
+    if (sold) { done += p; n++; } else { openCost += t.buy * t.qty; if (p != null) openVal += p; }
+    return `<tr><td>${nameOf(t.id)} <span class="mut">${tierOf(t.id)} · ${t.city}</span></td><td>${new Date(t.at).toLocaleDateString("pt-PT")}</td>
+      <td>${t.qty}</td><td>${fmt(t.buy)}</td><td>${fmt(m)}</td><td>${sold ? fmt(t.sell) : "—"}</td>
+      <td class="${p == null ? "" : p >= 0 ? "pos" : "neg"}">${fmt(p)}${sold ? "" : p == null ? "" : " <span class='mut'>(est.)</span>"}</td>
+      <td>${sold ? "Vendido" : "Em aberto"}</td>
+      <td>${sold ? "" : `<button data-act="sold" data-i="${i}">Vendi</button>`} <button data-act="del" data-i="${i}">×</button></td></tr>`;
+  }).join("") || `<tr><td colspan="9" class="mut">Ainda sem trocas. Usa «Comprei» na lista de oportunidades ou adiciona acima.</td></tr>`;
+  $("#kpis").innerHTML = `<div class="kpi"><span class="mut">Lucro realizado</span><b class="${done >= 0 ? "pos" : "neg"}">${fmt(done)}</b><span class="mut">${n} vendas</span></div>
+    <div class="kpi"><span class="mut">Prata em ordens/stock</span><b>${fmt(openCost)}</b></div>
+    <div class="kpi"><span class="mut">Lucro estimado em aberto</span><b>${fmt(openVal)}</b><span class="mut">ao preço de mercado atual</span></div>`;
+}
+$("#exp").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(trades, null, 1)], { type: "application/json" })); a.download = "albion-trocas.json"; a.click(); };
+$("#imp").onclick = () => { const f = document.createElement("input"); f.type = "file"; f.accept = ".json"; f.onchange = async () => { try { trades = JSON.parse(await f.files[0].text()); saveTrades(); renderTrades(); refreshMarket(); } catch { alert("Ficheiro inválido."); } }; f.click(); };
+
+function tab(t) {
+  $("#pFlips").classList.toggle("hide", t !== "flips"); $("#pTrades").classList.toggle("hide", t !== "trades");
+  $("#tabFlips").classList.toggle("on", t === "flips"); $("#tabTrades").classList.toggle("on", t === "trades");
+  if (t === "trades") refreshMarket();
+}
+$("#tabFlips").onclick = () => tab("flips"); $("#tabTrades").onclick = () => tab("trades");
+
+const cached = store.get("flips", null);
+if (cached && cached.city === $("#city").value) { flips = cached.flips; $("#status").textContent = `${flips.length} oportunidades (guardadas às ${new Date(cached.at).toLocaleTimeString("pt-PT")}). Atualiza para preços frescos.`; render(); }
+renderTrades();
+</script>
+</body>
+</html>
