@@ -118,7 +118,6 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
   <div class="bar">
     <label>De<input id="rFrom" list="zl" style="width:220px" value="Thetford"></label>
     <label>Para<input id="rTo" list="zl" style="width:220px" value="Caerleon"></label>
-    <label>Preferência<select id="rMode"><option value="safe">Mais segura (evita vermelhas/pretas)</option><option value="short">Mais curta</option></select></label>
     <button class="btn" id="rOverlay">Abrir overlay</button>
   </div>
   <datalist id="zl"></datalist>
@@ -416,22 +415,35 @@ const zoneIdx = name => { const n = (name || "").trim().toLowerCase(); return ZO
 // confirmado no jogo: Thetford Portal → Widemoor Shore = "Saída Nordeste" (sem espelho, sem rotação)
 let cal = store.get("cal2", { mirror: false, rot: 0 });
 const rState = store.get("route", {});
-if (rState.from) $("#rFrom").value = rState.from; if (rState.to) $("#rTo").value = rState.to; if (rState.mode) $("#rMode").value = rState.mode;
+if (rState.from) $("#rFrom").value = rState.from; if (rState.to) $("#rTo").value = rState.to; let rPolicy = rState.policy || { type: "bal" };
 let routeStep = rState.step || 0;
-const saveRoute = () => store.set("route", { from: $("#rFrom").value, to: $("#rTo").value, mode: $("#rMode").value, step: routeStep });
+const saveRoute = () => store.set("route", { from: $("#rFrom").value, to: $("#rTo").value, policy: rPolicy, step: routeStep });
 
-function findRoute(a, b, mode) {
-  const W = mode === "safe" ? { 0: 1, 1: 1, 2: 1, 3: 1.3, 4: 8, 5: 15, 7: 1 } : {};
-  const dist = new Array(ZONES.length).fill(Infinity), prev = new Array(ZONES.length).fill(-1), seen = new Array(ZONES.length).fill(false);
-  dist[a] = 0;
-  for (;;) {
-    let u = -1; for (let i = 0; i < ZONES.length; i++) if (!seen[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
-    if (u < 0 || u === b) break;
-    seen[u] = true;
-    for (const v of ZONES[u][5]) { const d = dist[u] + (W[ZONES[v][1]] ?? 1); if (d < dist[v]) { dist[v] = d; prev[v] = u; } }
+// Todas as rotas "ótimas": para cada nº máximo de zonas perigosas (vermelhas/pretas), a rota com menos saltos.
+const DANGER = i => ZONES[i][1] === 4 || ZONES[i][1] === 5 ? 1 : 0;
+function routeOptions(a, b) {
+  const N = ZONES.length, MAXD = 20, key = (v, d) => d * N + v;
+  const jumps = new Map([[key(a, 0), 0]]), prev = new Map(), q = [[a, 0]];
+  for (let h = 0; h < q.length; h++) {
+    const [u, d] = q[h], j = jumps.get(key(u, d));
+    for (const v of ZONES[u][5]) {
+      const nd = d + DANGER(v); if (nd > MAXD || jumps.has(key(v, nd))) continue;
+      jumps.set(key(v, nd), j + 1); prev.set(key(v, nd), key(u, d)); q.push([v, nd]);
+    }
   }
-  if (dist[b] === Infinity) return null;
-  const path = []; for (let v = b; v >= 0; v = prev[v]) path.unshift(v); return path;
+  const opts = [];
+  for (let d = 0; d <= MAXD; d++) {
+    const j = jumps.get(key(b, d)); if (j == null || (opts.length && j >= opts[opts.length - 1].jumps)) continue;
+    const path = []; for (let k = key(b, d); k != null; k = prev.get(k)) path.unshift(k % N);
+    opts.push({ jumps: j, danger: d, path });
+  }
+  return opts; // da mais segura para a mais curta
+}
+function pickOption(opts, pol) {
+  if (pol.type === "safe") return opts[0];
+  if (pol.type === "short") return opts[opts.length - 1];
+  if (pol.type === "k") return [...opts].reverse().find(o => o.danger <= pol.k) || opts[0];
+  return opts.reduce((x, o) => (o.jumps + 3 * o.danger < x.jumps + 3 * x.danger ? o : x)); // equilibrada: cada zona perigosa "vale" 3 saltos
 }
 // ângulo (graus, 0 = Este, sentido anti-horário) da zona a para a zona b, já com a calibração
 function angle(a, b, c = cal) {
@@ -447,17 +459,26 @@ function renderRoute() {
   saveRoute();
   const a = zoneIdx($("#rFrom").value), b = zoneIdx($("#rTo").value);
   if (a < 0 || b < 0) { $("#rSummary").textContent = "Escolhe as zonas de partida e de chegada da lista."; $("#rList").innerHTML = ""; route = null; renderOverlay(); return; }
-  route = findRoute(a, b, $("#rMode").value);
-  if (!route) { $("#rSummary").textContent = "Não encontrei caminho entre estas zonas."; $("#rList").innerHTML = ""; renderOverlay(); return; }
+  const opts = routeOptions(a, b);
+  if (!opts.length) { route = null; $("#rSummary").textContent = "Não encontrei caminho entre estas zonas."; $("#rList").innerHTML = ""; renderOverlay(); return; }
+  const chosen = pickOption(opts, rPolicy); route = chosen.path;
+  const tag = o => [o === opts[0] && "mais segura", o === pickOption(opts, { type: "bal" }) && "equilibrada", o === opts[opts.length - 1] && "mais curta"].filter(Boolean).join(" · ");
   routeStep = Math.min(routeStep, route.length - 1);
   const reds = route.filter(i => ZONES[i][1] === 4).length, blacks = route.filter(i => ZONES[i][1] === 5).length;
-  $("#rSummary").innerHTML = `<b class="gold">${route.length - 1} saltos</b> · ${reds} zonas vermelhas · ${blacks} pretas${reds + blacks ? ` · <span class="neg">cuidado: podes perder a carga</span>` : ""}. Clica num passo para marcar onde estás.`;
+  $("#rSummary").innerHTML = `<div class="bar" style="margin-bottom:8px">${opts.map((o, i) => `<button class="${o === chosen ? "btn" : "btn2"}" data-opt="${i}">${o.jumps} saltos · ${o.danger} perigosas${tag(o) ? `<small style="display:block;font-size:11px">${tag(o)}</small>` : ""}</button>`).join("")}</div>
+    <b class="gold">${route.length - 1} saltos</b> · ${reds} zonas vermelhas · ${blacks} pretas${reds + blacks ? ` · <span class="neg">cuidado: podes perder a carga</span>` : ""}. Clica num passo para marcar onde estás.`;
   $("#rList").innerHTML = route.map((z, i) => `<li data-step="${i}" class="${i < routeStep ? "done" : i === routeStep ? "cur" : ""}">
     <span class="mut" style="width:22px">${i + 1}.</span>${zoneLabel(z)}<span class="mut">${ZTYPE[ZONES[z][1]] || ""}</span>
     ${i < route.length - 1 ? `<span class="dir">${arrowSvg(angle(z, route[i + 1]))}${compass(angle(z, route[i + 1]))}</span>` : `<span class="dir">Chegaste</span>`}</li>`).join("");
   renderOverlay();
 }
-for (const id of ["rFrom", "rTo", "rMode"]) $("#" + id).onchange = () => { routeStep = 0; renderRoute(); };
+for (const id of ["rFrom", "rTo"]) $("#" + id).onchange = () => { routeStep = 0; renderRoute(); };
+$("#rSummary").onclick = e => {
+  const b = e.target.closest("button[data-opt]"); if (!b) return;
+  const a = zoneIdx($("#rFrom").value), z = zoneIdx($("#rTo").value), opts = routeOptions(a, z), o = opts[+b.dataset.opt];
+  rPolicy = o === opts[0] ? { type: "safe" } : o === opts[opts.length - 1] ? { type: "short" } : o === pickOption(opts, { type: "bal" }) ? { type: "bal" } : { type: "k", k: o.danger };
+  routeStep = 0; renderRoute();
+};
 $("#rList").onclick = e => { const li = e.target.closest("li[data-step]"); if (li) { routeStep = +li.dataset.step; renderRoute(); } };
 
 // overlay: janela pequena sempre por cima (Document Picture-in-Picture, Chrome/Edge)
