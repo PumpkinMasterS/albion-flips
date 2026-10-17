@@ -530,10 +530,10 @@ input{flex:1;min-width:0;font:inherit;color:#efe3c8;background:#120c07;border:1p
 button.sm{flex:none;font-size:13px;padding:6px 10px}
 .quick{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
 button.q{flex:none;font:600 11px "Alegreya Sans",sans-serif;padding:3px 7px;background:#2a1d12;color:#f3d58a;border:1px solid #5a4128}`;
-let currentZone = -1, ocrMsg = ""; // última zona lida pelo OCR
+let currentZone = -1, ocrMsg = "", matchedSub = "", currentSub = ""; // currentSub: ex. "Thetford Market" (conta como Thetford) // última zona lida pelo OCR
 function updateHere() {
   const el = pip && pip.document.getElementById("here"); if (!el) return;
-  el.innerHTML = (currentZone >= 0 ? `Estás em ${zoneLabel(currentZone)}` : `<span class="mut">${ocr ? "A procurar o nome da zona…" : "Leitura desligada"}</span>`)
+  el.innerHTML = (currentZone >= 0 ? `Estás em ${zoneLabel(currentZone)}${currentSub ? ` <span class="mut">(${esc(currentSub)})</span>` : ""}` : `<span class="mut">${ocr ? "A procurar o nome da zona…" : "Leitura desligada"}</span>`)
     + (ocr ? "" : ` <button class="sm" id="ocrOn" style="flex:none;font-size:12px;padding:3px 8px">Ligar leitura</button>`)
     + (ocrMsg ? `<div class="mut" style="font-size:11px;width:100%">${esc(ocrMsg)}</div>` : "");
   const on = pip.document.getElementById("ocrOn"); if (on) on.onclick = () => $("#ocrBtn").click();
@@ -644,8 +644,8 @@ function matchZone(text, strict = 0.8) {
   const z = matchGraph(text, strict), sc = zoneScores(text), xs = zoneScores(text, XNORM);
   // outro sítio conhecido (ex.: "Thetford Market") que bate melhor do que a zona escolhida?
   let x = -1; xs.forEach((v, i) => { if (v >= 0.8 && (x < 0 || v * XNORM[i].length > xs[x] * XNORM[x].length)) x = i; });
-  if (x >= 0 && (z < 0 || xs[x] * XNORM[x].length > sc[z] * ZNORM[z].length)) return EXTRA[x][1];
-  return z;
+  if (x >= 0 && (z < 0 || xs[x] * XNORM[x].length > sc[z] * ZNORM[z].length)) { matchedSub = EXTRA[x][1] >= 0 ? EXTRA[x][0] : ""; return EXTRA[x][1]; }
+  matchedSub = ""; return z;
 }
 function matchGraph(text, strict) {
   const sc = zoneScores(text), pz = priorZone();
@@ -745,7 +745,7 @@ async function ocrTick() {
       if (z >= 0) {
         ocr.hits = z === ocr.last ? ocr.hits + 1 : 1; ocr.last = z;
         $("#ocrStatus").innerHTML = `A ler: <b class="gold">${esc(ZONES[z][0])}</b> <span class="mut">(pelo ${via})</span>`; ocrMsg = "";
-        if (ocr.hits >= 2 || z === currentZone) onZoneSeen(z);
+        if (ocr.hits >= 2 || z === currentZone) { currentSub = matchedSub; onZoneSeen(z); }
       } else { $("#ocrStatus").textContent = `Não reconheci («${txt.slice(0, 40)}»). Ajusta a área até o nome aparecer no quadro.`; ocrMsg = `Não leio o nome («${txt.slice(0, 24)}»)`; }
       updateHere();
     } catch (e) { $("#ocrStatus").textContent = "Erro no OCR: " + e.message; }
