@@ -12,3 +12,18 @@ blob = json.dumps(names, ensure_ascii=False).replace("</", "<" + chr(92) + "/")
 html = open("template.html", encoding="utf-8").read().replace("__NAMES__", blob)
 open("index.html", "w", encoding="utf-8").write(html)
 print(len(names), "items")
+
+# ---- zonas (rotas): Albion Navigator zoneData.json + tiers de albionroads maps.json ----
+import os, re
+ZD = os.environ.get("ZONEDATA", "zonedata")
+zones = json.load(open(os.path.join(ZD, "zoneData.json"), encoding="utf-8"))
+maps = json.load(open(os.path.join(ZD, "maps.json"), encoding="utf-8"))
+norm = lambda s: re.sub(r"[^a-z]", "", s.lower())
+tiers = {norm(m["mapName"]): m.get("tier") for m in maps}
+keep = {z["id"] for z in zones if z["type"] != 6}  # 6 = Roads of Avalon (mudam todos os dias)
+idx = {zid: i for i, zid in enumerate(sorted(keep))}
+out = [[z["displayName"], z["type"], round(z["position"][0], 1), round(z["position"][1], 1), tiers.get(norm(z["displayName"])),
+        sorted(idx[c] for c in z["connections"] if c in keep)] for z in sorted(zones, key=lambda z: z["id"]) if z["id"] in keep]
+html = open("index.html", encoding="utf-8").read().replace("__ZONES__", json.dumps(out, ensure_ascii=False, separators=(",", ":")))
+open("index.html", "w", encoding="utf-8").write(html)
+print(len(out), "zonas")

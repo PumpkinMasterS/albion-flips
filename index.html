@@ -60,6 +60,14 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
 .kpi b{display:block;font:800 22px Cinzel,serif;margin:2px 0}
 .note{background:var(--parch);color:var(--ink);border-radius:6px;padding:10px 12px;font-size:13px;border:1px solid #b89a5e}
 .hide{display:none}
+.route{margin:0;padding:0;list-style:none;counter-reset:s}
+.route li{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid #5a412855;cursor:pointer}
+.route li.cur{background:#d6a84f22;outline:1px solid var(--gold);border-radius:4px}
+.route li.done{opacity:.45}
+.zdot{width:14px;height:14px;border-radius:50%;flex:none;border:2px solid #0008}
+.z0,.z1{background:#d6a84f}.z2{background:#4a8fe0}.z3{background:#e2c044}.z4{background:#d9473a}.z5{background:#111;border-color:#bbb}.z7{background:#9b6bd6}
+.dir{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--gold2);font-weight:700}
+.dir svg{width:22px;height:22px}
 @media (max-width:640px){h1{font-size:22px}.tabs button{padding:8px 10px;font-size:12px}th,td{padding:6px 7px}}
 </style>
 </head>
@@ -81,6 +89,7 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
   <button data-tab="city" class="on">Flip na cidade</button>
   <button data-tab="trans">Entre cidades</button>
   <button data-tab="bm">Mercado Negro</button>
+  <button data-tab="route">Rotas</button>
   <button data-tab="trades">As minhas trocas</button>
 </nav>
 
@@ -102,6 +111,28 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
   <th data-k="name">Item</th><th data-k="tier">Tier</th><th data-k="route">Rota</th><th data-k="buy">Compra</th><th data-k="sell">Venda</th>
   <th data-k="profit">Lucro/un.</th><th data-k="roi">ROI</th><th data-k="vol">Vendas/dia</th><th data-k="avg">Médio 7d</th>
   <th data-k="day">Lucro/dia est.</th><th data-k="ageH">Idade</th><th></th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section id="pRoute" class="hide">
+<div class="frame">
+  <div class="bar">
+    <label>De<input id="rFrom" list="zl" style="width:220px" value="Thetford"></label>
+    <label>Para<input id="rTo" list="zl" style="width:220px" value="Caerleon"></label>
+    <label>Preferência<select id="rMode"><option value="safe">Mais segura (evita vermelhas/pretas)</option><option value="short">Mais curta</option></select></label>
+    <button class="btn" id="rOverlay">Abrir overlay</button>
+  </div>
+  <datalist id="zl"></datalist>
+  <div id="rSummary" class="sub" style="margin-top:10px"></div>
+</div>
+<div class="frame"><ol id="rList" class="route"></ol></div>
+<details class="frame">
+  <summary class="gold" style="cursor:pointer;font-family:Cinzel,serif">Acertar as direções com o teu minimapa</summary>
+  <p class="sub">As direções são calculadas pelo mapa-mundo. Se não baterem certo com o teu minimapa, vai a uma zona (por exemplo Thetford), vê no minimapa para que lado fica a saída para pelo menos duas zonas vizinhas e escolhe aqui. O resto ajusta-se sozinho.</p>
+  <div class="bar"><label>Zona<input id="cZone" list="zl" value="Thetford" style="width:220px"></label></div>
+  <div id="cRows" class="bar" style="margin-top:10px"></div>
+  <div id="cRes" class="sub" style="margin-top:8px"></div>
+</details>
+<div class="sub">Mapa de zonas: dados da comunidade (Albion Navigator, albionroads). As Roads of Avalon não entram, porque mudam todos os dias.</div>
 </section>
 
 <section id="pTrades" class="hide">
@@ -186,8 +217,10 @@ for (const id of PREF_KEYS.concat("q")) $("#" + id).oninput = () => { savePrefs(
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
   const t = b.dataset.tab;
-  $("#pOpp").classList.toggle("hide", t === "trades"); $("#pTrades").classList.toggle("hide", t !== "trades");
+  $("#pOpp").classList.toggle("hide", t === "trades" || t === "route"); $("#pTrades").classList.toggle("hide", t !== "trades");
+  $("#pRoute").classList.toggle("hide", t !== "route");
   if (t === "trades") { refreshMarket(); return; }
+  if (t === "route") { renderRoute(); return; }
   tabNow = t; applyTab();
 });
 
@@ -294,12 +327,15 @@ async function render(fetchVol = true) {
     <td>${fmt(r.sell)}<small class="mut" style="display:block">${sellL(r)}</small></td>
     <td class="pos"><b>${fmt(r.profit)}</b></td><td>${(r.roi * 100).toFixed(0)}%</td><td>${fmt(r.vol)}</td><td>${fmt(r.avg)}</td>
     <td class="gold">${fmt(r.day)}</td><td class="mut">${r.ageH.toFixed(1)}h</td>
-    <td><button class="btn2" data-buy="${esc(r.id)}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button></td></tr>`).join("")
+    <td><button class="btn2" data-buy="${esc(r.id)}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button>
+      ${r.from !== r.to && r.from !== "Brecilien" && r.to !== "Brecilien" ? `<button class="btn2" data-route-from="${esc(r.from)}" data-route-to="${esc(r.to === BM ? "Caerleon" : r.to)}">Rota</button>` : ""}</td></tr>`).join("")
     || `<tr><td colspan="12" class="mut" style="text-align:center;padding:30px">Nada com lucro com estes filtros.</td></tr>`;
   $("#status").textContent = `${rows.length} oportunidades · mercado lido às ${new Date(loadedAt).toLocaleTimeString("pt-PT")}`;
 }
 document.querySelectorAll("#tOpp th[data-k]").forEach(th => th.onclick = () => { sortDir = sortK === th.dataset.k ? -sortDir : -1; sortK = th.dataset.k; render(false); });
 $("#tOpp").onclick = e => {
+  const rb = e.target.closest("button[data-route-from]");
+  if (rb) { $("#rFrom").value = rb.dataset.routeFrom; $("#rTo").value = rb.dataset.routeTo; routeStep = 0; saveRoute(); document.querySelector('.tabs button[data-tab="route"]').click(); return; }
   const b = e.target.closest("button[data-buy]"); if (!b) return;
   document.querySelector('.tabs button[data-tab="trades"]').click();
   $("#tItem").value = b.dataset.buy; $("#tBuy").value = b.dataset.p; $("#tCity").value = b.dataset.from; $("#tSellCity").value = b.dataset.to; $("#tQty").focus();
@@ -354,6 +390,120 @@ function renderTrades() {
 }
 $("#exp").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(trades, null, 1)], { type: "application/json" })); a.download = "albion-trocas.json"; a.click(); };
 $("#imp").onclick = () => { const f = document.createElement("input"); f.type = "file"; f.accept = ".json"; f.onchange = async () => { try { trades = JSON.parse(await f.files[0].text()); saveTrades(); renderTrades(); refreshMarket(); } catch { alert("Ficheiro inválido."); } }; f.click(); };
+
+// ---------- rotas ----------
+const ZONES = [["Thetford",1,-19.8,187.3,1,[5,6,7,9,27]],["Swamp Cross",0,-52.4,160.5,null,[5,8,342]],["Camlann",4,11.4,243.0,7,[11,25,26,347]],["Morgana's Rest",1,-4.7,-261.1,null,[36,52,395,397]],["Sleetwater Basin",3,6.9,192.6,5,[6,344,352]],["Chillhag",2,-40.2,173.2,3,[0,1,8,342]],["Willowsigh Marsh",3,-8.1,200.5,5,[0,4,10]],["Windripple Fen",2,-6.9,176.1,4,[0,20,342]],["Stinkhag",2,-54.9,179.4,3,[1,5,9,19]],["Dusklight Fen",2,-35.6,191.3,4,[0,8,23]],["Nightcreak Marsh",3,-14.5,217.7,5,[6,21,26]],["Stumprot Swamp",4,-11.1,247.2,6,[2,26,258,273]],["Dewleaf Fen",2,-70.7,209.4,5,[15,16,19]],["Wispwhisper Marsh",3,-57.4,223.6,6,[15,22,23]],["Spectral Sump",4,31.0,214.8,6,[25,344,346,353]],["Bonepool Marsh",3,-68.5,235.3,6,[12,13,16,253]],["Curlew Fen",2,-86.3,250.4,4,[12,15,17,256]],["Slimehag",2,-95.1,267.6,3,[16,248,259]],["Murky Fen",2,-22.2,144.7,4,[20,342,349]],["Fog Fen",2,-67.7,187.2,4,[8,12,23]],["Drownhorse Basin",3,-1.4,159.3,5,[7,18,349,352]],["Slithertail Marsh",3,-28.9,225.2,5,[10,22,23]],["Wanderlure Basin",3,-41.6,233.0,5,[13,21,253,258]],["Falsestep Marsh",3,-53.3,201.4,5,[9,13,19,21]],["Darkground Swamp",4,5.5,222.2,6,[25,26,344]],["Anklesnag Mire",4,25.8,231.2,6,[2,14,24,354]],["Dusktree Swamp",4,-6.6,229.1,6,[2,10,11,24]],["Thetford Portal",1,-125.3,-337.0,null,[0,32,35,37,39,40]],["Wetgrave Bog",5,189.4,-145.0,5,[62,65]],["Scuttlesink Pools",5,-0.9,-373.1,5,[47,76,131]],["Meltwater Bog",5,45.8,-282.3,5,[77,379]],["Drownfield Course",5,-34.6,-316.3,5,[51,242]],["Widemoor Shore",5,-108.0,-365.2,5,[27,50]],["Drownfield Mire",5,-33.2,-287.0,5,[51,52,242,411]],["Runnelvein Slough",5,71.7,-166.2,5,[49,64,382,408]],["Widemoor Pool",5,-96.0,-342.0,5,[27,50,53]],["Drownfield Fen",5,-21.3,-250.9,5,[3,55,63,409]],["Willowshade Wetlands",5,-108.5,-304.3,5,[27,54,56]],["Skullmarsh Lower",5,165.9,-3.2,5,[66,121,386]],["Widemoor Estuary",5,-136.0,-322.4,5,[27,56,57]],["Widemoor Delta",5,-154.7,-330.1,5,[27,57]],["Willowshade Mire",5,-123.5,-252.1,5,[42,67,401]],["Willowshade Lake",5,-106.7,-243.9,5,[41,68,140]],["Willowshade Icemarsh",5,-135.9,-244.2,5,[80,140,374]],["Springsump Basin",5,-22.3,-4.5,5,[58,74]],["Longfen Marsh",5,-134.4,-50.4,5,[207,322]],["Mudfoot Sump",5,-207.4,-90.6,5,[60,275,321]],["Scuttlesink Mouth",5,7.5,-384.4,6,[29,111]],["Meltwater Delta",5,63.9,-301.8,6,[61,359]],["Runnelvein Bog",5,86.4,-176.1,6,[34,367,396]],["Widemoor Hills",5,-91.2,-354.4,6,[32,35,214]],["Drownfield Wetland",5,-53.4,-311.7,6,[31,33,115,148]],["Drownfield Slough",5,-17.5,-270.2,6,[3,33,227]],["Widemoor End",5,-90.8,-325.2,6,[35,115,148]],["Willowshade Pools",5,-89.7,-295.4,6,[37,115,402]],["Drownfield Rut",5,-37.6,-247.1,6,[36,78,325]],["Widemoor Woods",5,-125.5,-300.2,6,[37,39,67]],["Widemoor Flats",5,-153.9,-291.1,6,[39,40,71]],["Springsump Wetland",5,-38.4,-11.7,6,[44,200,202]],["Longfen Arms",5,-150.5,-32.3,6,[238,295,330]],["Mudfoot Mounds",5,-223.3,-82.0,6,[46]],["Meltwater Sump",5,48.6,-314.7,7,[48,377,391]],["Wetgrave Swale",5,178.8,-159.4,7,[28,160,241]],["Drownfield Quag",5,-32.5,-262.2,7,[36,371,411]],["Runnelvein Sink",5,67.4,-151.2,7,[34,384]],["Wetgrave Marsh",5,175.5,-130.9,7,[28,195,276]],["Skullmarsh Upper",5,175.6,-18.5,7,[38,136]],["Willowshade Hills",5,-109.1,-276.4,7,[41,56]],["Willowshade Sink",5,-92.4,-262.4,7,[42,277,402]],["Deathwisp Sink",5,-76.0,-216.5,7,[79,154,325]],["Deathwisp Bog",5,-65.3,-171.3,7,[79,314,326]],["Widemoor Fen",5,-161.7,-278.9,7,[57,374]],["Sunkenbough Woods",5,32.7,-55.6,7,[81,152,387]],["Twinchannel Narrows",5,-191.6,-192.7,7,[80,317]],["Springsump Melt",5,-32.1,3.1,7,[44,206,208,390]],["Longfen Veins",5,-123.6,-62.1,7,[82,413]],["Scuttlesink Marsh",5,6.9,-362.2,8,[29,111]],["Meltwater Channel",5,36.9,-271.2,8,[30,395,397]],["Drownfield Sink",5,-32.8,-230.4,8,[55,118]],["Black Monastery",5,-73.8,-191.8,8,[69,70,278]],["Unhallowed Cloister",5,-178.6,-202.5,8,[43,73,302,368]],["Sunkenbough Spring",5,21.7,-36.5,8,[72,232,403]],["Deathreach Priory",5,-136.1,-78.2,8,[75,287,322]],["Lymhurst",1,127.5,313.7,1,[93,97,98,101,110]],["Forest Cross",0,155.0,333.0,null,[94,98,170]],["Inis Mon",3,113.7,262.2,5,[89,105,107,341]],["Merlyn's Rest",1,119.2,-95.4,null,[116,134,150]],["Larchroad",2,101.5,207.5,3,[109,332,335,340]],["Russerdell",2,129.5,232.6,5,[89,90,109]],["Rowanwood",3,119.9,245.0,6,[85,88,90,336]],["Oakcopse",2,139.0,247.3,5,[88,89,102,105]],["Highbole Glen",4,88.3,279.0,6,[96,100,107,108]],["Willow Wood",3,111.3,342.1,5,[101,104,106,184]],["Birchcopse",2,139.5,307.3,4,[83,94,102]],["Redlake",2,153.3,318.2,3,[84,93,98]],["Longtimber Glen",4,56.1,284.0,6,[99,108,348]],["Murkweald",4,72.6,321.9,7,[91,99,189,190]],["Yew Wood",3,108.8,289.5,5,[83,100,105]],["Stagbourne",2,137.3,327.9,3,[83,84,94,170]],["Wyre Forest",4,43.7,294.2,6,[95,96,172,249]],["Hornbeam Wood",3,99.1,297.4,5,[91,97,104]],["Ferndell",2,118.7,321.4,4,[83,92,170]],["Flynsdell",2,142.1,292.5,4,[90,93]],["Pinecopse",2,104.0,377.5,5,[106,174,181,184]],["Deeproot Wood",3,87.9,317.8,6,[92,100,190]],["Aspenwood",3,124.1,277.1,5,[85,90,97]],["Spindlewood",3,97.0,347.6,6,[92,103,186,190]],["Owlsong Glen",4,96.1,266.9,6,[85,91,350]],["Nightbloom Forest",4,72.1,276.4,6,[91,95,350,355]],["Cedarcopse",2,116.0,215.3,4,[87,88,336]],["Lymhurst Portal",1,111.1,-29.8,null,[83,117,119,121,122,123,125,126,128]],["Brambleshore Hinterlands",5,20.9,-370.9,5,[47,76,375]],["Deepwood Dell",5,90.4,-238.4,5,[146,363,365]],["Greenshore Peninsula",5,173.7,-67.7,5,[161,229,299]],["Giantweald Dale",5,139.2,-91.8,5,[134,147,385,399]],["Timberscar Dell",5,-75.3,-302.3,5,[51,53,54]],["Giantweald Copse",5,113.1,-110.5,5,[86,137,162,384]],["Watchwood Precipice",5,144.7,-49.6,5,[110,135,136,369]],["Deadpine Forest",5,-19.9,-219.6,5,[78,383,410]],["Hightree Steep",5,116.7,-50.1,5,[110,138]],["Southgrove Escarp",5,-9.8,76.0,5,[143,235]],["Watchwood Grove",5,151.6,-26.3,5,[38,110,136,151]],["Hightree Lake",5,87.3,-56.8,5,[110,138,300]],["Hightree Dale",5,124.1,-19.3,5,[110,151]],["Rivercopse Crossing",5,25.5,-87.1,5,[152,155,165,243]],["Hightree Strand",5,88.6,-22.3,5,[110,141,153]],["Hightree Glade",5,113.3,7.2,5,[110,142,151]],["Driftwood Vale",5,-97.6,-214.4,5,[140,154,313,412]],["Hightree Enclave",5,91.1,15.7,5,[110,141,142]],["Westweald Thicket",5,-205.6,-176.1,5,[157,389]],["Greenhollow Vale",5,-162.1,-102.2,5,[158,290,328]],["Timbertop Dale",5,-20.0,-381.3,6,[29,144,159,213]],["Timberslope Dell",5,166.2,-202.2,6,[145,226,393]],["Deepwood Gorge",5,64.9,-234.2,6,[365,366,396]],["Giantweald Woods",5,133.1,-109.0,6,[86,114,162,228]],["Watchwood Lakeside",5,155.3,-56.6,6,[117,399]],["Watchwood Bluffs",5,161.2,-34.1,6,[66,117,121,229]],["Giantweald Roots",5,95.6,-103.8,6,[116,150,312]],["Hightree Pass",5,110.0,-62.9,6,[119,122,385]],["Hightree Borderlands",5,57.6,-47.8,6,[153,300,387]],["Driftwood Glen",5,-118.7,-232.1,6,[42,43,127,368]],["Hightree Levee",5,80.5,-7.8,6,[125,128,198,216]],["Hightree Cliffs",5,117.1,28,6,[126,128,404]],["Southgrove Copse",5,-17.0,58.8,6,[120,156,224]],["Timbertop Wood",5,-31.6,-393.4,7,[131,192]],["Timberslope Grove",5,170.2,-189.9,7,[132,160,241]],["Deepwood Pines",5,95.0,-218.3,7,[112,381]],["Giantweald Edge",5,157.5,-115.7,7,[114,228,299]],["Timberscar Copse",5,-74.9,-330.4,7,[51,53,215]],["Deepwood Copse",5,56.7,-216.4,7,[163,382,398]],["Giantweald Glade",5,104.6,-91.6,7,[86,137]],["Hightree Isle",5,138,-13.3,7,[121,123,126,386]],["Rivercopse Curve",5,36.6,-75.0,7,[72,124,312]],["Hightree Hillock",5,69.0,-40.7,7,[125,139]],["Driftwood Hollow",5,-91.3,-199.8,7,[69,127,279]],["Rivercopse Path",5,7.8,-76.6,7,[124,197]],["Southgrove Thicket",5,-8.3,49.6,7,[143,203,235]],["Westweald Shore",5,-219.1,-193.8,7,[129,199,370]],["Greenhollow Copse",5,-175.9,-95.7,7,[130,308,321,322]],["Timbertop Escarp",5,-29.6,-372.4,8,[131,297]],["Timberslope Bridge",5,162.0,-173.9,8,[62,145,298]],["Greenshore Bay",5,180.5,-79.5,8,[113,276]],["Eye of the Forest",5,117.4,-130.7,8,[116,134,408]],["Eldersleep",5,50.9,-206.1,8,[149,383,410]],["Darkbough Snag",5,36.0,-160.4,8,[311,372]],["Rivercopse Fount",5,39.4,-103.5,8,[124,311,312,373]],["Bridgewatch",1,15.8,370.8,1,[177,179,180,182,191]],["Steppe Cross",0,0.1,403.6,null,[182,183,265]],["Astolat",4,28.8,336.8,6,[169,173,189]],["Kindlegrass Steppe",4,45.6,343.9,6,[168,186,189]],["Cracked Earth",2,131.5,345.6,3,[84,98,101,184]],["Roastcorpse Steppe",4,10.8,299.8,6,[172,249,252,272]],["Deadvein Gully",4,16.7,312.8,6,[99,171,173]],["Shiftshadow Expanse",4,9.3,328.7,7,[168,172,187,272]],["Parchthroat Plain",3,51.5,386.3,6,[103,175,185,186]],["Drywater Meadow",2,37.6,399.4,4,[174,178,180,185]],["Slowtree Plain",3,17.6,351.6,5,[177,187]],["Lazygrass Plain",3,36.3,356.6,5,[166,176,178]],["Snapshaft Trough",3,42.9,373.3,5,[175,177,186]],["Smoothfloor Cleft",2,2.6,362.5,4,[166,188,263]],["Longmarch Meadow",2,26.2,385.6,4,[166,175,183]],["Steelhide Meadow",2,113,392.1,5,[103,184,185]],["Fractured Ground",2,6.3,384.3,3,[166,167,183,263]],["Prospector's Hope",2,15.4,401.3,3,[167,180,182]],["Dryfield Meadow",2,129.3,359.9,4,[92,103,170,181]],["Sandgust Cleft",2,52.4,404.7,5,[174,175,181]],["Longshadow Plain",3,56.6,362.0,5,[106,169,174,178]],["Flatriver Trough",3,2.3,344.2,5,[173,176,188,267]],["Redstone Plain",3,-13.1,350.2,5,[179,187,266,269]],["Flimmerair Steppe",4,33.3,309.0,6,[96,168,169]],["Goldshimmer Plain",3,84.6,337.6,6,[96,104,106]],["Bridgewatch Portal",1,-75.3,32.9,null,[166,208,209,210,211,212]],["Northstrand Dunes",5,-18.2,-408,5,[144,213]],["Swiftsands Plain",5,205.1,-172.0,5,[226,241]],["Skysand Plateau",5,6.1,-303.2,5,[377,379,407]],["Drybasin Riverbed",5,164.1,-147.6,5,[65,228]],["Slakesands Canyon",5,180.7,-47.8,5,[229]],["Sunfang Ravine",5,-16.8,-91.4,5,[155,217]],["Thirstwater Steppe",5,62.4,7.2,5,[141,233,388]],["Sandmount Strand",5,-209.6,-211.7,5,[157,245,302]],["Dryvein Riverbed",5,-25.0,-26.7,5,[58,219,234]],["Bleachskull Steppe",5,-192.1,-166.9,5,[220,289]],["Dryvein Cross",5,-54.8,-21.7,5,[58,221,234,288]],["Sunstrand Shoal",5,6.1,38.3,5,[156,306,405]],["Sunstrand Delta",5,33.9,64.6,5,[222,329]],["Sandmount Esker",5,-248.7,-188,5,[236,370]],["Dryvein Plain",5,-58.5,-1.3,5,[74,221,237]],["Farshore Esker",5,-120.1,-36.3,5,[45,223,238,413]],["Sandrift Steppe",5,-58.3,16.4,5,[74,191,224,237]],["Sandrift Prairie",5,-97.9,20.8,5,[191,237,296]],["Sandrift Coast",5,-50.5,46.0,5,[191,224,239]],["Sandrift Shore",5,-56.2,58.3,5,[191,239]],["Farshore Bay",5,-114.0,33.8,5,[191,240,296]],["Northstrand Beach",5,-7.8,-398.1,6,[131,192]],["Drytop Riverbed",5,-76.7,-364.9,6,[50,215]],["Drytop Pillars",5,-67.5,-352.2,6,[148,214]],["Thirstwater Waste",5,64.1,-15.6,6,[141,233,387]],["Sunfang Approach",5,-37.0,-75.2,6,[197,232,244]],["Parchsand Cliffs",5,-112.7,-126.2,6,[246,303,328]],["Dryvein Steppe",5,2.8,-18.8,6,[200,247,403]],["Bleachskull Desert",5,-176.5,-148.6,6,[201,304,318]],["Dryvein Oasis",5,-75.0,-21,6,[202,206,307]],["Sunstrand Dunes",5,25.5,77.1,6,[204,235]],["Farshore Heath",5,-110.6,-22.6,6,[207,307]],["Sandrift Expanse",5,-40.6,35.7,6,[143,208,210,390]],["Farshore Lagoon",5,-122.9,-3.7,6,[240,296]],["Swiftsands Basin",5,194.3,-181.0,7,[132,193]],["Skysand Ridge",5,-3.6,-287.0,7,[52,395]],["Drybasin Oasis",5,150.0,-133.3,7,[134,147,195]],["Slakesands Mesa",5,170.2,-49.0,7,[113,136,196]],["Sunfang Cliffs",5,-52.7,-132.9,7,[231,327]],["Sunfang Wasteland",5,-29.5,-116.5,7,[230,243,301]],["Dryvein End",5,-20.7,-51.3,7,[81,217,234]],["Thirstwater Gully",5,52.5,-6.0,7,[198,216]],["Dryvein Confluence",5,-39.5,-46.2,7,[200,202,232]],["Sunstrand Quicksands",5,5.0,60.2,7,[120,156,222,329]],["Sandmount Desert",5,-257.7,-175.4,7,[205,305]],["Sandrift Dunes",5,-73.7,7.0,7,[206,208,209]],["Farshore Drylands",5,-134.7,-27.5,7,[59,207]],["Sandrift Fringe",5,-34.6,58.7,7,[210,211]],["Farshore Cape",5,-137.4,9.0,7,[212,225]],["Swiftsands Chaparral",5,192.6,-166.2,8,[62,145,193]],["Citadel of Ash",5,-15.5,-298.5,8,[31,33,407]],["Wailing Bulwark",5,2.6,-104.2,8,[124,231]],["Sunfang Dawn",5,-61.6,-87.2,8,[217,301,319]],["Sandmount Ascent",5,-222.1,-216.4,8,[199,280]],["Parchsand Drought",5,-108.7,-109.5,8,[218,281,283]],["Daemonium Keep",5,15.8,-6.6,8,[219,405]],["Highland Cross",0,-96.4,302.4,null,[17,259,260]],["Caerleon",1,28.2,288.9,null,[99,171,251,348]],["Martlock",1,-58.6,280.3,1,[254,256,257,260,275]],["Birken Fell",4,14.0,271.7,6,[249,252,347]],["Mardale",4,1.0,285.3,6,[171,251,273]],["Lewsdon Hill",3,-50.8,248.4,5,[15,22,254]],["Eldon Hill",3,-45.2,263.1,5,[250,253,255]],["Gutras Hill",3,-27.3,273.2,5,[254,257]],["Haytor",2,-68.3,259.2,4,[16,250,259]],["Blackthorn Quarry",2,-44.4,296.7,4,[250,255,264,270]],["Bowscale Fell",4,-31.0,248.5,6,[11,22]],["Brent Knoll",2,-81.8,283.5,3,[17,248,256,260]],["Mase Knoll",2,-78.4,300.5,3,[248,250,259,264]],["Saddle Tor",2,-41.7,376.4,5,[266,268,274]],["Croker Hill",3,-39.2,324.9,5,[264,269,270,274]],["Vixen Tor",2,-10.3,368.2,4,[179,182,265,266]],["Haldon Tor",2,-62.9,312.6,4,[257,260,262,274]],["Goffers Knoll",2,-23.1,378.1,3,[167,263]],["Kilmar Tor",2,-24.3,363.2,5,[188,261,263,268]],["Carns Hill",3,-19.4,331.7,6,[187,269,270]],["Brons Hill",3,-39.7,356.6,6,[261,266,269,274]],["Felniks Hill",3,-31.6,343.2,6,[188,262,267,268]],["Adrens Hill",3,-34.3,307.4,5,[257,262,267,271]],["Garrow Fell",4,-12.7,302.5,6,[270,272,273]],["Broken Fell",4,-9.7,319.9,6,[171,173,271]],["Runnel Sink",4,-12.2,274.8,7,[11,252,271]],["Bellever Tor",2,-52.7,335.1,5,[261,262,264,268]],["Martlock Portal",1,-220.3,-132.6,null,[46,250,289,291,292,293]],["Flatrock Cliffs",5,176.6,-98.8,5,[65,161,299]],["Murdergulch Cross",5,-78.6,-243.9,5,[68,313,325,371]],["Murdergulch Gap",5,-52.9,-219.9,5,[79,325,326]],["Razorrock Passage",5,-88.0,-176.9,5,[154,314]],["Braemore Upland",5,-213.5,-241.1,5,[245,302]],["Razorrock Valley",5,-89.0,-123.2,5,[246,303,314,316]],["Highstone Meadow",5,-129.0,-156.6,5,[286,315,318]],["Battlebrae Plain",5,-93.0,-86.9,5,[246,319,320]],["Battlebrae Lake",5,-64.9,-60.5,5,[288,319]],["Stonemouth Northbluff",5,50.0,24.8,5,[306,388]],["Highstone Plains",5,-135.7,-141.9,5,[282,328]],["Battlebrae Flatland",5,-120.8,-85.9,5,[82,320,328]],["Battlebrae Peaks",5,-77.6,-53.4,5,[202,284,357,406]],["Windgrass Border",5,-205.6,-150.5,5,[201,275,304,389]],["Highstone Grassland",5,-166.1,-129.6,5,[130,304]],["Windgrass Gully",5,-237.2,-152.1,5,[275,305,389]],["Windgrass Rill",5,-201.9,-127.3,5,[275,304,321]],["Windgrass Precipice",5,-251.6,-146.4,5,[275,305]],["Gravemound Brim",5,-211.7,-62.8,5,[308,323]],["Gravemound Hills",5,-182.3,-70.2,5,[59,308,323]],["Stonelake Fields",5,-103.2,3.8,5,[209,212,225,307]],["Shaleheath Hills",5,-14.7,-352.6,6,[159,309,364]],["Skylake Bridge",5,145.3,-163.8,6,[160,310,381]],["Flatrock Plateau",5,162.1,-89.3,6,[113,147,276]],["Thunderrock Rapids",5,63.0,-77.2,6,[122,139]],["Razorrock Ravine",5,-50.2,-103.9,6,[231,244,327]],["Braemore Lowland",5,-191.4,-238.5,6,[80,199,280]],["Razorrock Edge",5,-96.7,-151.8,6,[218,281,315]],["Windgrass Fields",5,-189.2,-138.6,6,[220,289,290,292]],["Windgrass Coast",5,-248.1,-159.3,6,[236,291,293]],["Stonemouth Bay",5,32.0,6.2,6,[203,285]],["Stonelake Hillock",5,-93.7,-11.1,6,[221,223,296]],["Gravemound Slope",5,-192.5,-81.5,6,[158,294,295]],["Shaleheath Steep",5,-6.7,-340.3,7,[297,394]],["Skylake Hinterlands",5,138.0,-151.0,7,[298,367]],["Thunderrock Ascent",5,31.2,-130.1,7,[164,165,324]],["Thunderrock Upland",5,63.1,-95.5,7,[137,152,165]],["Murdergulch Trail",5,-88.0,-230.9,7,[127,277]],["Razorrock Chasm",5,-78.6,-136.8,7,[70,279,281]],["Razorrock Verge",5,-113.2,-162.4,7,[282,303,412]],["Razorrock Bank",5,-75.4,-110.0,7,[281,327]],["Highstone Mound",5,-163.8,-180.7,7,[73,318]],["Highstone Plateau",5,-159.8,-161.5,7,[220,282,317]],["Battlebrae Grassland",5,-73.5,-73.1,7,[244,283,284,357]],["Battlebrae Meadow",5,-107.5,-75.3,7,[283,287,357]],["Windgrass Terrace",5,-189.4,-110.3,7,[46,158,292]],["Gravemound Knoll",5,-160.4,-67.3,7,[45,82,158]],["Gravemound Cliffs",5,-204.5,-50.9,7,[294,295]],["Thunderrock Draw",5,58.3,-131.4,8,[311,372,373]],["Murdergulch Divide",5,-63.6,-238.9,8,[55,69,277,278]],["Murdergulch Ravine",5,-47.9,-197.6,8,[70,278]],["Razorrock Gulch",5,-59.8,-113.7,8,[230,301,316]],["Highstone Loch",5,-140.9,-114.5,8,[130,218,286,287]],["Stonemouth Southbluff",5,34.5,41.2,8,[204,235]],["Redtree Enclave",5,-161.4,-22.8,8,[59]],["Fort Sterling",1,70.8,208.9,1,[335,339,340,345,358]],["Mountain Cross",0,101.1,179.1,null,[87,334,335]],["Pen Garn",2,45.4,180.3,5,[337,339,351,356]],["Bryn Gorge",2,74.7,184.1,3,[332,335,339,356]],["Crose Gorge",2,91.6,191.5,3,[87,331,332,334]],["Pen Kerrig",2,101.6,228.3,4,[89,109,340,341]],["Cairn Gorm",3,30.6,198.9,5,[333,344,346,352]],["Tharcal Fissure",3,76.2,235.3,5,[341,345]],["Pen Gent",2,59.1,184.1,4,[331,333,334]],["Mawar Gorge",2,87.0,213.9,4,[87,331,336]],["Cairn Darg",3,99.4,243.0,5,[85,336,338,350]],["Gwan Gorge",2,-28.5,164.7,3,[1,5,7,18]],["Creag Garr",4,56.6,248.1,6,[353,355]],["Cairn Glascore",3,15.6,210.4,5,[4,14,24,337]],["Cairn Camain",3,61.8,226.4,5,[331,338,346]],["Cairn Fidair",3,46.2,213.2,5,[14,337,345]],["Malag Crevasse",4,26.8,255.9,6,[2,251,348,354]],["Creag Morr",4,36.9,271.2,6,[95,249,347]],["Pen Fenair",2,18.7,148.6,5,[18,20,351,356]],["Cairn Drain",3,88.4,251.8,6,[107,108,341]],["Caulder Fissure",3,36.7,166.9,6,[333,349,352]],["Cairn Cloch",3,18.9,176.8,6,[4,20,337,351]],["Creag Dhor",4,47.0,232.2,6,[14,343]],["Creag Meagir",4,42.0,245.8,6,[25,347,355]],["Domhain Chasm",4,51.2,261.7,7,[108,343,354]],["Pen Uchaf",2,58.1,162.1,4,[333,334,349]],["Arthur's Rest",1,-91.8,-65.6,null,[288,319,320,413]],["Fort Sterling Portal",1,109.2,-271.7,null,[331,359,360,362,363,365]],["Whitebank Descent",5,78.1,-297.8,5,[48,358,392]],["Frostpeak Vista",5,160.7,-255.3,5,[358,378]],["Everwinter Crossing",5,39.5,-300.4,5,[377,379,392]],["Whitebank Stream",5,76.7,-272.8,5,[358,380,392]],["Whitebank Shore",5,101.8,-256.9,5,[112,358,378]],["Everwinter Shores",5,-21.5,-335.4,5,[297,394]],["Whitebank Cross",5,67.5,-251.6,5,[112,133,358,380]],["Glacierfall Passage",5,48.2,-251.4,5,[133,398]],["Floatshoal Floe",5,106.0,-177.9,5,[49,310,381]],["Avalanche Ravine",5,-129.0,-201.7,5,[80,140,412]],["Munten Rise",5,139.8,-64.1,5,[117,385,399]],["Frostbite Chasm",5,-228.6,-173.5,5,[157,205,389]],["Whitepeak Ascent",5,-62.7,-259.8,5,[63,277,402]],["Iceburn Firth",5,35,-178.7,5,[164,324,400]],["Flammog Fork",5,78.4,-120.8,5,[165,324,384]],["Frostseep Ravine",5,-148.1,-260.3,5,[43,71,401]],["Everwinter Reach",5,42.6,-358.4,5,[111,391]],["Everwinter Peak",5,17.2,-326.8,6,[391,407]],["Everwinter Plain",5,24.6,-310.8,6,[61,194,361]],["Frostpeak Ascent",5,157.1,-238.6,6,[360,363,393]],["Everwinter Gorge",5,26.8,-292.9,6,[30,194,361,395]],["Whitebank Wall",5,57.4,-265.1,6,[362,365]],["Floatshoal Fissure",5,116.7,-195.3,6,[146,298,367,393]],["Iceburn Peaks",5,66.3,-189.0,6,[34,149,396,400]],["Glacierfall Canyon",5,17.8,-227.7,6,[118,163]],["Flammog Valley",5,93.2,-125.9,6,[64,116,373,408]],["Munten Tundra",5,120.4,-76.2,6,[114,138,369]],["Glacierbreak Summit",5,153.9,13.9,6,[38,151]],["Firesink Caldera",5,40.6,-34.7,6,[72,139,216,403]],["Whitecliff Peak",5,74.5,26.7,6,[198,285,404]],["Frostbite Mountain",5,-221.2,-164.5,6,[129,289,291,370]],["Frostspring Passage",5,-17.2,31.7,6,[74,224,405]],["Everwinter Passage",5,32.2,-339.1,7,[61,375,376]],["Whitebank Ridge",5,69.9,-282.6,7,[359,361,362]],["Floatshoal Bight",5,147.8,-193.6,7,[132,378,381]],["Everwinter Expanse",5,-14.2,-323.8,7,[309,364,407]],["Everwinter Gap",5,13.4,-279.6,7,[3,77,227,379]],["Iceburn Cliffs",5,78.3,-205.9,7,[49,133,382]],["Glacierfall Cross",5,29.5,-243.5,7,[3,77,398,409]],["Glacierfall Valley",5,39.0,-230.7,7,[149,366,397]],["Munten Fell",5,147.6,-75.6,7,[114,135,369]],["Iceburn Tundra",5,52.5,-181.2,7,[372,382]],["Frostseep Crevasse",5,-129.6,-274.0,7,[41,374]],["Whitepeak Spring",5,-70.7,-278.0,7,[54,68,371]],["Firesink Trench",5,33.0,-24.5,7,[81,219,387]],["Whitecliff Expanse",5,88.0,35.6,7,[142,388]],["Frostspring Volcano",5,-6.6,17.4,7,[203,247,390]],["Whitewall Ridge",5,-94.6,-35.5,7,[288,413]],["Everwinter Incline",5,0.5,-318.6,8,[194,242,376,394]],["Flammog Desolation",5,99.3,-151.2,8,[34,162,384]],["Glacierfall Pass",5,2.8,-240.6,8,[36,397]],["Glacierfall Fissure",5,17.0,-203.5,8,[118,163]],["Whitepeak Tundra",5,-49.0,-277.4,8,[33,63]],["Avalanche Incline",5,-113.5,-185.6,8,[127,315,368]],["Whitewall Pass",5,-100.8,-51.3,8,[75,207,357,406]]];   // [nome, tipo, x, y, tier, ligações]
+const ZTYPE = { 0: "Cidade inicial", 1: "Cidade", 2: "Azul", 3: "Amarela", 4: "Vermelha", 5: "Preta", 7: "Cidade (Outlands)" };
+const COMPASS = ["E", "NE", "N", "NO", "O", "SO", "S", "SE"];
+$("#zl").innerHTML = ZONES.map(z => `<option value="${esc(z[0])}">`).join("");
+const zoneIdx = name => { const n = (name || "").trim().toLowerCase(); return ZONES.findIndex(z => z[0].toLowerCase() === n); };
+let cal = store.get("cal", { mirror: true, rot: 0 });
+const rState = store.get("route", {});
+if (rState.from) $("#rFrom").value = rState.from; if (rState.to) $("#rTo").value = rState.to; if (rState.mode) $("#rMode").value = rState.mode;
+let routeStep = rState.step || 0;
+const saveRoute = () => store.set("route", { from: $("#rFrom").value, to: $("#rTo").value, mode: $("#rMode").value, step: routeStep });
+
+function findRoute(a, b, mode) {
+  const W = mode === "safe" ? { 0: 1, 1: 1, 2: 1, 3: 1.3, 4: 8, 5: 15, 7: 1 } : {};
+  const dist = new Array(ZONES.length).fill(Infinity), prev = new Array(ZONES.length).fill(-1), seen = new Array(ZONES.length).fill(false);
+  dist[a] = 0;
+  for (;;) {
+    let u = -1; for (let i = 0; i < ZONES.length; i++) if (!seen[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
+    if (u < 0 || u === b) break;
+    seen[u] = true;
+    for (const v of ZONES[u][5]) { const d = dist[u] + (W[ZONES[v][1]] ?? 1); if (d < dist[v]) { dist[v] = d; prev[v] = u; } }
+  }
+  if (dist[b] === Infinity) return null;
+  const path = []; for (let v = b; v >= 0; v = prev[v]) path.unshift(v); return path;
+}
+// ângulo (graus, 0 = Este, sentido anti-horário) da zona a para a zona b, já com a calibração
+function angle(a, b, c = cal) {
+  const dx = ZONES[b][2] - ZONES[a][2], dy = ZONES[b][3] - ZONES[a][3];
+  return ((Math.atan2(-dy, c.mirror ? -dx : dx) * 180 / Math.PI + c.rot * 45) % 360 + 360) % 360;
+}
+const compass = deg => COMPASS[Math.round(deg / 45) % 8];
+const arrowSvg = deg => `<svg viewBox="0 0 24 24" style="transform:rotate(${90 - deg}deg)"><path d="M12 2 20 14h-5v8h-6v-8H4z" fill="currentColor"/></svg>`;
+const zoneLabel = i => `<span class="zdot z${ZONES[i][1]}"></span><span>${esc(ZONES[i][0])}${ZONES[i][4] && ![0, 1, 7].includes(ZONES[i][1]) ? ` <span class="mut">T${ZONES[i][4]}</span>` : ""}</span>`;
+
+let route = null;
+function renderRoute() {
+  saveRoute();
+  const a = zoneIdx($("#rFrom").value), b = zoneIdx($("#rTo").value);
+  if (a < 0 || b < 0) { $("#rSummary").textContent = "Escolhe as zonas de partida e de chegada da lista."; $("#rList").innerHTML = ""; route = null; renderOverlay(); return; }
+  route = findRoute(a, b, $("#rMode").value);
+  if (!route) { $("#rSummary").textContent = "Não encontrei caminho entre estas zonas."; $("#rList").innerHTML = ""; renderOverlay(); return; }
+  routeStep = Math.min(routeStep, route.length - 1);
+  const reds = route.filter(i => ZONES[i][1] === 4).length, blacks = route.filter(i => ZONES[i][1] === 5).length;
+  $("#rSummary").innerHTML = `<b class="gold">${route.length - 1} saltos</b> · ${reds} zonas vermelhas · ${blacks} pretas${reds + blacks ? ` · <span class="neg">cuidado: podes perder a carga</span>` : ""}. Clica num passo para marcar onde estás.`;
+  $("#rList").innerHTML = route.map((z, i) => `<li data-step="${i}" class="${i < routeStep ? "done" : i === routeStep ? "cur" : ""}">
+    <span class="mut" style="width:22px">${i + 1}.</span>${zoneLabel(z)}<span class="mut">${ZTYPE[ZONES[z][1]] || ""}</span>
+    ${i < route.length - 1 ? `<span class="dir">${arrowSvg(angle(z, route[i + 1]))}${compass(angle(z, route[i + 1]))}</span>` : `<span class="dir">Chegaste</span>`}</li>`).join("");
+  renderOverlay();
+}
+for (const id of ["rFrom", "rTo", "rMode"]) $("#" + id).onchange = () => { routeStep = 0; renderRoute(); };
+$("#rList").onclick = e => { const li = e.target.closest("li[data-step]"); if (li) { routeStep = +li.dataset.step; renderRoute(); } };
+
+// overlay: janela pequena sempre por cima (Document Picture-in-Picture, Chrome/Edge)
+let pip = null;
+const PIP_CSS = `body{margin:0;background:#17110bee;color:#efe3c8;font:14px/1.35 "Alegreya Sans",system-ui,sans-serif;padding:10px;user-select:none}
+.h{display:flex;justify-content:space-between;color:#a8977a;font-size:12px}
+.cur{font:700 18px Cinzel,serif;color:#f3d58a;margin:6px 0;display:flex;align-items:center;gap:8px}
+.go{display:flex;align-items:center;gap:10px;background:#2a1d12;border:1px solid #5a4128;border-radius:6px;padding:8px;margin:6px 0}
+.go svg{width:44px;height:44px;color:#f3d58a;flex:none}.go b{font:800 22px Cinzel,serif;color:#f3d58a}
+.nx{font-size:13px;color:#a8977a}.nx div{display:flex;align-items:center;gap:6px;padding:2px 0}
+.zdot{width:12px;height:12px;border-radius:50%;flex:none;border:2px solid #0008;display:inline-block}
+.z0,.z1{background:#d6a84f}.z2{background:#4a8fe0}.z3{background:#e2c044}.z4{background:#d9473a}.z5{background:#111;border-color:#bbb}.z7{background:#9b6bd6}
+.mut{color:#a8977a}.btns{display:flex;gap:6px;margin-top:8px}
+button{flex:1;font:700 16px Cinzel,serif;padding:8px;border-radius:5px;border:1px solid #7a5520;background:linear-gradient(#f3d58a,#c48f35);color:#2a1a08;cursor:pointer}`;
+function renderOverlay() {
+  if (!pip) return;
+  const d = pip.document;
+  if (!route) { d.body.innerHTML = `<div class="mut">Sem rota. Escolhe origem e destino no dashboard.</div>`; return; }
+  const z = route[routeStep], last = routeStep === route.length - 1;
+  const nxt = route.slice(routeStep + 1, routeStep + 5);
+  d.body.innerHTML = `<div class="h"><span>Passo ${routeStep + 1}/${route.length}</span><span>${esc(ZONES[route[route.length - 1]][0])}</span></div>
+    <div class="cur">${zoneLabel(z)}</div>
+    ${last ? `<div class="go"><b>Chegaste!</b></div>` : `<div class="go">${arrowSvg(angle(z, route[routeStep + 1]))}<div><b>${compass(angle(z, route[routeStep + 1]))}</b><div>para ${zoneLabel(route[routeStep + 1])}</div></div></div>`}
+    <div class="nx">${nxt.slice(1).map(i => `<div>${zoneLabel(i)}</div>`).join("")}</div>
+    <div class="btns"><button id="p">◀</button><button id="n">Entrei ▶</button></div>`;
+  d.getElementById("p").onclick = () => { routeStep = Math.max(0, routeStep - 1); renderRoute(); };
+  d.getElementById("n").onclick = () => { routeStep = Math.min(route.length - 1, routeStep + 1); renderRoute(); };
+}
+$("#rOverlay").onclick = async () => {
+  if (!("documentPictureInPicture" in window)) return alert("O overlay precisa do Chrome ou do Edge (versão recente).");
+  if (pip) { pip.close(); pip = null; }
+  pip = await documentPictureInPicture.requestWindow({ width: 280, height: 300 });
+  const st = pip.document.createElement("style"); st.textContent = PIP_CSS; pip.document.head.append(st);
+  const fl = pip.document.createElement("link"); fl.rel = "stylesheet"; fl.href = "https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Alegreya+Sans:wght@400;700&display=swap"; pip.document.head.append(fl);
+  pip.addEventListener("pagehide", () => { pip = null; });
+  renderRoute();
+};
+
+// calibração das direções com o minimapa
+function renderCal() {
+  const a = zoneIdx($("#cZone").value);
+  if (a < 0) { $("#cRows").innerHTML = ""; return; }
+  const obs = store.get("calObs", {});
+  $("#cRows").innerHTML = ZONES[a][5].map(v => `<label>${esc(ZONES[v][0])}<select data-v="${v}"><option value="">—</option>${COMPASS.map((c, k) => `<option value="${k}" ${obs[a + ">" + v] == k ? "selected" : ""}>${c}</option>`).join("")}</select></label>`).join("");
+  $("#cRes").textContent = `Atual: ${cal.mirror ? "espelhado" : "normal"}, rodado ${cal.rot * 45}°.`;
+}
+$("#cZone").onchange = renderCal;
+$("#cRows").onchange = e => {
+  const a = zoneIdx($("#cZone").value), obs = store.get("calObs", {});
+  const v = e.target.dataset.v; if (e.target.value === "") delete obs[a + ">" + v]; else obs[a + ">" + v] = +e.target.value;
+  store.set("calObs", obs);
+  const pairs = Object.entries(obs).map(([k, c]) => [...k.split(">").map(Number), c]);
+  if (pairs.length >= 2) {
+    let best = null;
+    for (const mirror of [false, true]) for (let rot = 0; rot < 8; rot++) {
+      const err = pairs.reduce((s, [x, y, c]) => { const d = Math.abs(angle(x, y, { mirror, rot }) - c * 45) % 360; return s + Math.min(d, 360 - d); }, 0);
+      if (!best || err < best.err) best = { mirror, rot, err };
+    }
+    cal = { mirror: best.mirror, rot: best.rot }; store.set("cal", cal); renderRoute();
+  }
+  renderCal();
+};
+renderCal();
 
 applyTab(); renderTrades();
 </script>

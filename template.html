@@ -60,6 +60,14 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
 .kpi b{display:block;font:800 22px Cinzel,serif;margin:2px 0}
 .note{background:var(--parch);color:var(--ink);border-radius:6px;padding:10px 12px;font-size:13px;border:1px solid #b89a5e}
 .hide{display:none}
+.route{margin:0;padding:0;list-style:none;counter-reset:s}
+.route li{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid #5a412855;cursor:pointer}
+.route li.cur{background:#d6a84f22;outline:1px solid var(--gold);border-radius:4px}
+.route li.done{opacity:.45}
+.zdot{width:14px;height:14px;border-radius:50%;flex:none;border:2px solid #0008}
+.z0,.z1{background:#d6a84f}.z2{background:#4a8fe0}.z3{background:#e2c044}.z4{background:#d9473a}.z5{background:#111;border-color:#bbb}.z7{background:#9b6bd6}
+.dir{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--gold2);font-weight:700}
+.dir svg{width:22px;height:22px}
 @media (max-width:640px){h1{font-size:22px}.tabs button{padding:8px 10px;font-size:12px}th,td{padding:6px 7px}}
 </style>
 </head>
@@ -81,6 +89,7 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
   <button data-tab="city" class="on">Flip na cidade</button>
   <button data-tab="trans">Entre cidades</button>
   <button data-tab="bm">Mercado Negro</button>
+  <button data-tab="route">Rotas</button>
   <button data-tab="trades">As minhas trocas</button>
 </nav>
 
@@ -102,6 +111,28 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:230px}
   <th data-k="name">Item</th><th data-k="tier">Tier</th><th data-k="route">Rota</th><th data-k="buy">Compra</th><th data-k="sell">Venda</th>
   <th data-k="profit">Lucro/un.</th><th data-k="roi">ROI</th><th data-k="vol">Vendas/dia</th><th data-k="avg">Médio 7d</th>
   <th data-k="day">Lucro/dia est.</th><th data-k="ageH">Idade</th><th></th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section id="pRoute" class="hide">
+<div class="frame">
+  <div class="bar">
+    <label>De<input id="rFrom" list="zl" style="width:220px" value="Thetford"></label>
+    <label>Para<input id="rTo" list="zl" style="width:220px" value="Caerleon"></label>
+    <label>Preferência<select id="rMode"><option value="safe">Mais segura (evita vermelhas/pretas)</option><option value="short">Mais curta</option></select></label>
+    <button class="btn" id="rOverlay">Abrir overlay</button>
+  </div>
+  <datalist id="zl"></datalist>
+  <div id="rSummary" class="sub" style="margin-top:10px"></div>
+</div>
+<div class="frame"><ol id="rList" class="route"></ol></div>
+<details class="frame">
+  <summary class="gold" style="cursor:pointer;font-family:Cinzel,serif">Acertar as direções com o teu minimapa</summary>
+  <p class="sub">As direções são calculadas pelo mapa-mundo. Se não baterem certo com o teu minimapa, vai a uma zona (por exemplo Thetford), vê no minimapa para que lado fica a saída para pelo menos duas zonas vizinhas e escolhe aqui. O resto ajusta-se sozinho.</p>
+  <div class="bar"><label>Zona<input id="cZone" list="zl" value="Thetford" style="width:220px"></label></div>
+  <div id="cRows" class="bar" style="margin-top:10px"></div>
+  <div id="cRes" class="sub" style="margin-top:8px"></div>
+</details>
+<div class="sub">Mapa de zonas: dados da comunidade (Albion Navigator, albionroads). As Roads of Avalon não entram, porque mudam todos os dias.</div>
 </section>
 
 <section id="pTrades" class="hide">
@@ -186,8 +217,10 @@ for (const id of PREF_KEYS.concat("q")) $("#" + id).oninput = () => { savePrefs(
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
   const t = b.dataset.tab;
-  $("#pOpp").classList.toggle("hide", t === "trades"); $("#pTrades").classList.toggle("hide", t !== "trades");
+  $("#pOpp").classList.toggle("hide", t === "trades" || t === "route"); $("#pTrades").classList.toggle("hide", t !== "trades");
+  $("#pRoute").classList.toggle("hide", t !== "route");
   if (t === "trades") { refreshMarket(); return; }
+  if (t === "route") { renderRoute(); return; }
   tabNow = t; applyTab();
 });
 
@@ -294,12 +327,15 @@ async function render(fetchVol = true) {
     <td>${fmt(r.sell)}<small class="mut" style="display:block">${sellL(r)}</small></td>
     <td class="pos"><b>${fmt(r.profit)}</b></td><td>${(r.roi * 100).toFixed(0)}%</td><td>${fmt(r.vol)}</td><td>${fmt(r.avg)}</td>
     <td class="gold">${fmt(r.day)}</td><td class="mut">${r.ageH.toFixed(1)}h</td>
-    <td><button class="btn2" data-buy="${esc(r.id)}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button></td></tr>`).join("")
+    <td><button class="btn2" data-buy="${esc(r.id)}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button>
+      ${r.from !== r.to && r.from !== "Brecilien" && r.to !== "Brecilien" ? `<button class="btn2" data-route-from="${esc(r.from)}" data-route-to="${esc(r.to === BM ? "Caerleon" : r.to)}">Rota</button>` : ""}</td></tr>`).join("")
     || `<tr><td colspan="12" class="mut" style="text-align:center;padding:30px">Nada com lucro com estes filtros.</td></tr>`;
   $("#status").textContent = `${rows.length} oportunidades · mercado lido às ${new Date(loadedAt).toLocaleTimeString("pt-PT")}`;
 }
 document.querySelectorAll("#tOpp th[data-k]").forEach(th => th.onclick = () => { sortDir = sortK === th.dataset.k ? -sortDir : -1; sortK = th.dataset.k; render(false); });
 $("#tOpp").onclick = e => {
+  const rb = e.target.closest("button[data-route-from]");
+  if (rb) { $("#rFrom").value = rb.dataset.routeFrom; $("#rTo").value = rb.dataset.routeTo; routeStep = 0; saveRoute(); document.querySelector('.tabs button[data-tab="route"]').click(); return; }
   const b = e.target.closest("button[data-buy]"); if (!b) return;
   document.querySelector('.tabs button[data-tab="trades"]').click();
   $("#tItem").value = b.dataset.buy; $("#tBuy").value = b.dataset.p; $("#tCity").value = b.dataset.from; $("#tSellCity").value = b.dataset.to; $("#tQty").focus();
@@ -354,6 +390,120 @@ function renderTrades() {
 }
 $("#exp").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(trades, null, 1)], { type: "application/json" })); a.download = "albion-trocas.json"; a.click(); };
 $("#imp").onclick = () => { const f = document.createElement("input"); f.type = "file"; f.accept = ".json"; f.onchange = async () => { try { trades = JSON.parse(await f.files[0].text()); saveTrades(); renderTrades(); refreshMarket(); } catch { alert("Ficheiro inválido."); } }; f.click(); };
+
+// ---------- rotas ----------
+const ZONES = __ZONES__;   // [nome, tipo, x, y, tier, ligações]
+const ZTYPE = { 0: "Cidade inicial", 1: "Cidade", 2: "Azul", 3: "Amarela", 4: "Vermelha", 5: "Preta", 7: "Cidade (Outlands)" };
+const COMPASS = ["E", "NE", "N", "NO", "O", "SO", "S", "SE"];
+$("#zl").innerHTML = ZONES.map(z => `<option value="${esc(z[0])}">`).join("");
+const zoneIdx = name => { const n = (name || "").trim().toLowerCase(); return ZONES.findIndex(z => z[0].toLowerCase() === n); };
+let cal = store.get("cal", { mirror: true, rot: 0 });
+const rState = store.get("route", {});
+if (rState.from) $("#rFrom").value = rState.from; if (rState.to) $("#rTo").value = rState.to; if (rState.mode) $("#rMode").value = rState.mode;
+let routeStep = rState.step || 0;
+const saveRoute = () => store.set("route", { from: $("#rFrom").value, to: $("#rTo").value, mode: $("#rMode").value, step: routeStep });
+
+function findRoute(a, b, mode) {
+  const W = mode === "safe" ? { 0: 1, 1: 1, 2: 1, 3: 1.3, 4: 8, 5: 15, 7: 1 } : {};
+  const dist = new Array(ZONES.length).fill(Infinity), prev = new Array(ZONES.length).fill(-1), seen = new Array(ZONES.length).fill(false);
+  dist[a] = 0;
+  for (;;) {
+    let u = -1; for (let i = 0; i < ZONES.length; i++) if (!seen[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
+    if (u < 0 || u === b) break;
+    seen[u] = true;
+    for (const v of ZONES[u][5]) { const d = dist[u] + (W[ZONES[v][1]] ?? 1); if (d < dist[v]) { dist[v] = d; prev[v] = u; } }
+  }
+  if (dist[b] === Infinity) return null;
+  const path = []; for (let v = b; v >= 0; v = prev[v]) path.unshift(v); return path;
+}
+// ângulo (graus, 0 = Este, sentido anti-horário) da zona a para a zona b, já com a calibração
+function angle(a, b, c = cal) {
+  const dx = ZONES[b][2] - ZONES[a][2], dy = ZONES[b][3] - ZONES[a][3];
+  return ((Math.atan2(-dy, c.mirror ? -dx : dx) * 180 / Math.PI + c.rot * 45) % 360 + 360) % 360;
+}
+const compass = deg => COMPASS[Math.round(deg / 45) % 8];
+const arrowSvg = deg => `<svg viewBox="0 0 24 24" style="transform:rotate(${90 - deg}deg)"><path d="M12 2 20 14h-5v8h-6v-8H4z" fill="currentColor"/></svg>`;
+const zoneLabel = i => `<span class="zdot z${ZONES[i][1]}"></span><span>${esc(ZONES[i][0])}${ZONES[i][4] && ![0, 1, 7].includes(ZONES[i][1]) ? ` <span class="mut">T${ZONES[i][4]}</span>` : ""}</span>`;
+
+let route = null;
+function renderRoute() {
+  saveRoute();
+  const a = zoneIdx($("#rFrom").value), b = zoneIdx($("#rTo").value);
+  if (a < 0 || b < 0) { $("#rSummary").textContent = "Escolhe as zonas de partida e de chegada da lista."; $("#rList").innerHTML = ""; route = null; renderOverlay(); return; }
+  route = findRoute(a, b, $("#rMode").value);
+  if (!route) { $("#rSummary").textContent = "Não encontrei caminho entre estas zonas."; $("#rList").innerHTML = ""; renderOverlay(); return; }
+  routeStep = Math.min(routeStep, route.length - 1);
+  const reds = route.filter(i => ZONES[i][1] === 4).length, blacks = route.filter(i => ZONES[i][1] === 5).length;
+  $("#rSummary").innerHTML = `<b class="gold">${route.length - 1} saltos</b> · ${reds} zonas vermelhas · ${blacks} pretas${reds + blacks ? ` · <span class="neg">cuidado: podes perder a carga</span>` : ""}. Clica num passo para marcar onde estás.`;
+  $("#rList").innerHTML = route.map((z, i) => `<li data-step="${i}" class="${i < routeStep ? "done" : i === routeStep ? "cur" : ""}">
+    <span class="mut" style="width:22px">${i + 1}.</span>${zoneLabel(z)}<span class="mut">${ZTYPE[ZONES[z][1]] || ""}</span>
+    ${i < route.length - 1 ? `<span class="dir">${arrowSvg(angle(z, route[i + 1]))}${compass(angle(z, route[i + 1]))}</span>` : `<span class="dir">Chegaste</span>`}</li>`).join("");
+  renderOverlay();
+}
+for (const id of ["rFrom", "rTo", "rMode"]) $("#" + id).onchange = () => { routeStep = 0; renderRoute(); };
+$("#rList").onclick = e => { const li = e.target.closest("li[data-step]"); if (li) { routeStep = +li.dataset.step; renderRoute(); } };
+
+// overlay: janela pequena sempre por cima (Document Picture-in-Picture, Chrome/Edge)
+let pip = null;
+const PIP_CSS = `body{margin:0;background:#17110bee;color:#efe3c8;font:14px/1.35 "Alegreya Sans",system-ui,sans-serif;padding:10px;user-select:none}
+.h{display:flex;justify-content:space-between;color:#a8977a;font-size:12px}
+.cur{font:700 18px Cinzel,serif;color:#f3d58a;margin:6px 0;display:flex;align-items:center;gap:8px}
+.go{display:flex;align-items:center;gap:10px;background:#2a1d12;border:1px solid #5a4128;border-radius:6px;padding:8px;margin:6px 0}
+.go svg{width:44px;height:44px;color:#f3d58a;flex:none}.go b{font:800 22px Cinzel,serif;color:#f3d58a}
+.nx{font-size:13px;color:#a8977a}.nx div{display:flex;align-items:center;gap:6px;padding:2px 0}
+.zdot{width:12px;height:12px;border-radius:50%;flex:none;border:2px solid #0008;display:inline-block}
+.z0,.z1{background:#d6a84f}.z2{background:#4a8fe0}.z3{background:#e2c044}.z4{background:#d9473a}.z5{background:#111;border-color:#bbb}.z7{background:#9b6bd6}
+.mut{color:#a8977a}.btns{display:flex;gap:6px;margin-top:8px}
+button{flex:1;font:700 16px Cinzel,serif;padding:8px;border-radius:5px;border:1px solid #7a5520;background:linear-gradient(#f3d58a,#c48f35);color:#2a1a08;cursor:pointer}`;
+function renderOverlay() {
+  if (!pip) return;
+  const d = pip.document;
+  if (!route) { d.body.innerHTML = `<div class="mut">Sem rota. Escolhe origem e destino no dashboard.</div>`; return; }
+  const z = route[routeStep], last = routeStep === route.length - 1;
+  const nxt = route.slice(routeStep + 1, routeStep + 5);
+  d.body.innerHTML = `<div class="h"><span>Passo ${routeStep + 1}/${route.length}</span><span>${esc(ZONES[route[route.length - 1]][0])}</span></div>
+    <div class="cur">${zoneLabel(z)}</div>
+    ${last ? `<div class="go"><b>Chegaste!</b></div>` : `<div class="go">${arrowSvg(angle(z, route[routeStep + 1]))}<div><b>${compass(angle(z, route[routeStep + 1]))}</b><div>para ${zoneLabel(route[routeStep + 1])}</div></div></div>`}
+    <div class="nx">${nxt.slice(1).map(i => `<div>${zoneLabel(i)}</div>`).join("")}</div>
+    <div class="btns"><button id="p">◀</button><button id="n">Entrei ▶</button></div>`;
+  d.getElementById("p").onclick = () => { routeStep = Math.max(0, routeStep - 1); renderRoute(); };
+  d.getElementById("n").onclick = () => { routeStep = Math.min(route.length - 1, routeStep + 1); renderRoute(); };
+}
+$("#rOverlay").onclick = async () => {
+  if (!("documentPictureInPicture" in window)) return alert("O overlay precisa do Chrome ou do Edge (versão recente).");
+  if (pip) { pip.close(); pip = null; }
+  pip = await documentPictureInPicture.requestWindow({ width: 280, height: 300 });
+  const st = pip.document.createElement("style"); st.textContent = PIP_CSS; pip.document.head.append(st);
+  const fl = pip.document.createElement("link"); fl.rel = "stylesheet"; fl.href = "https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Alegreya+Sans:wght@400;700&display=swap"; pip.document.head.append(fl);
+  pip.addEventListener("pagehide", () => { pip = null; });
+  renderRoute();
+};
+
+// calibração das direções com o minimapa
+function renderCal() {
+  const a = zoneIdx($("#cZone").value);
+  if (a < 0) { $("#cRows").innerHTML = ""; return; }
+  const obs = store.get("calObs", {});
+  $("#cRows").innerHTML = ZONES[a][5].map(v => `<label>${esc(ZONES[v][0])}<select data-v="${v}"><option value="">—</option>${COMPASS.map((c, k) => `<option value="${k}" ${obs[a + ">" + v] == k ? "selected" : ""}>${c}</option>`).join("")}</select></label>`).join("");
+  $("#cRes").textContent = `Atual: ${cal.mirror ? "espelhado" : "normal"}, rodado ${cal.rot * 45}°.`;
+}
+$("#cZone").onchange = renderCal;
+$("#cRows").onchange = e => {
+  const a = zoneIdx($("#cZone").value), obs = store.get("calObs", {});
+  const v = e.target.dataset.v; if (e.target.value === "") delete obs[a + ">" + v]; else obs[a + ">" + v] = +e.target.value;
+  store.set("calObs", obs);
+  const pairs = Object.entries(obs).map(([k, c]) => [...k.split(">").map(Number), c]);
+  if (pairs.length >= 2) {
+    let best = null;
+    for (const mirror of [false, true]) for (let rot = 0; rot < 8; rot++) {
+      const err = pairs.reduce((s, [x, y, c]) => { const d = Math.abs(angle(x, y, { mirror, rot }) - c * 45) % 360; return s + Math.min(d, 360 - d); }, 0);
+      if (!best || err < best.err) best = { mirror, rot, err };
+    }
+    cal = { mirror: best.mirror, rot: best.rot }; store.set("cal", cal); renderRoute();
+  }
+  renderCal();
+};
+renderCal();
 
 applyTab(); renderTrades();
 </script>
