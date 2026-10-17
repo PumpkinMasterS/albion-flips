@@ -495,18 +495,23 @@ const PIP_CSS = `body{margin:0;background:#17110bee;color:#efe3c8;font:14px/1.35
 .z0,.z1{background:#d6a84f}.z2{background:#4a8fe0}.z3{background:#e2c044}.z4{background:#d9473a}.z5{background:#111;border-color:#bbb}.z7{background:#9b6bd6}
 .mut{color:#a8977a}.btns{display:flex;gap:6px;margin-top:8px}
 button{flex:1;font:700 16px Cinzel,serif;padding:8px;border-radius:5px;border:1px solid #7a5520;background:linear-gradient(#f3d58a,#c48f35);color:#2a1a08;cursor:pointer}
-.here{font-size:13px;display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.here{font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px}
 .dest{border-top:1px solid #5a4128;margin-top:8px;padding-top:8px}.row{display:flex;gap:6px}
 input{flex:1;min-width:0;font:inherit;color:#efe3c8;background:#120c07;border:1px solid #5a4128;border-radius:4px;padding:6px}
 button.sm{flex:none;font-size:13px;padding:6px 10px}
 .quick{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
 button.q{flex:none;font:600 11px "Alegreya Sans",sans-serif;padding:3px 7px;background:#2a1d12;color:#f3d58a;border:1px solid #5a4128}`;
-let currentZone = -1; // última zona lida pelo OCR
+let currentZone = -1, ocrMsg = ""; // última zona lida pelo OCR
+function updateHere() {
+  const el = pip && pip.document.getElementById("here"); if (!el) return;
+  el.innerHTML = (currentZone >= 0 ? `Estás em ${zoneLabel(currentZone)}` : `<span class="mut">${ocr ? "A procurar o nome da zona…" : "Leitura desligada: liga-a no dashboard"}</span>`)
+    + (ocrMsg ? `<div class="mut" style="font-size:11px;width:100%">${esc(ocrMsg)}</div>` : "");
+}
 const QUICK = ["Thetford", "Lymhurst", "Bridgewatch", "Martlock", "Fort Sterling", "Caerleon"];
 function renderOverlay() {
   if (!pip) return;
   const d = pip.document, box = d.getElementById("dyn"); if (!box) return;
-  d.getElementById("here").innerHTML = currentZone >= 0 ? `Estás em ${zoneLabel(currentZone)}` : `<span class="mut">${ocr ? "A procurar o nome da zona…" : "Leitura desligada: liga-a no dashboard"}</span>`;
+  updateHere();
   if (!route) { box.innerHTML = `<div class="mut" style="margin:8px 0">Escolhe um destino em baixo.</div>`; return; }
   const z = route[routeStep], last = routeStep === route.length - 1;
   const nxt = route.slice(routeStep + 1, routeStep + 5);
@@ -599,27 +604,49 @@ function matchZone(text) {
 let ocr = null; // { stream, video, worker, last, hits }
 async function ocrTick() {
   if (!ocr) return;
-  const v = ocr.video, W = v.videoWidth, H = v.videoHeight;
+  let v = ocr.video;
+  if (ocr.cap) { try { v = await ocr.cap.grabFrame(); } catch { v = ocr.video; } }
+  const W = v.videoWidth || v.width, H = v.videoHeight || v.height;
   if (W && H) {
     const L = +$("#ocrL").value / 100, R = +$("#ocrR").value / 100, T = +$("#ocrT").value / 100, B = +$("#ocrB").value / 100;
-    const sx = W * L, sy = H * T, sw = Math.max(1, W * (R - L)), sh = Math.max(1, H * (B - T)), k = 60 / sh, pad = 24;
-    const c = ocr.canvas; c.width = sw * k + 2 * pad; c.height = sh * k + 2 * pad;
-    const g = c.getContext("2d", { willReadFrequently: true }); g.imageSmoothingQuality = "high";
-    g.fillStyle = "#000"; g.fillRect(0, 0, c.width, c.height); g.drawImage(v, sx, sy, sw, sh, pad, pad, sw * k, sh * k);
-    const img = g.getImageData(0, 0, c.width, c.height), d = img.data;
-    // só tons de cinzento; o Tesseract binariza sozinho (a barra é semitransparente, o fundo muda)
-    for (let i = 0; i < d.length; i += 4) { const y = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; d[i] = d[i + 1] = d[i + 2] = y; }
-    g.putImageData(img, 0, 0);
-    const pv = $("#ocrPrev"), pg = pv.getContext("2d"); pg.fillStyle = "#000"; pg.fillRect(0, 0, pv.width, pv.height);
-    pg.drawImage(c, 0, 0, pv.width, Math.min(pv.height, pv.width * c.height / c.width));
+    const sx = W * L, sy = H * T, sw = Math.max(1, W * (R - L)), sh = Math.max(1, H * (B - T)), k = 48 / sh, pad = 16;
+    // recorte ampliado em tons de cinzento
+    const cw = Math.round(sw * k), ch = Math.round(sh * k), src = ocr.canvas; src.width = cw; src.height = ch;
+    const g = src.getContext("2d", { willReadFrequently: true }); g.imageSmoothingQuality = "high"; g.drawImage(v, sx, sy, sw, sh, 0, 0, cw, ch);
+    const raw = g.getImageData(0, 0, cw, ch).data, lum = new Float32Array(cw * ch), hist = new Array(256).fill(0);
+    for (let i = 0, j = 0; j < lum.length; i += 4, j++) { lum[j] = 0.3 * raw[i] + 0.59 * raw[i + 1] + 0.11 * raw[i + 2]; hist[lum[j] | 0]++; }
+    // limiar de Otsu; o texto é a classe minoritária (a barra é semitransparente: o texto pode ficar mais claro ou mais escuro que o fundo)
+    let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+    let wB = 0, sB = 0, best = 0, thr = 128;
+    for (let i = 0; i < 256; i++) { wB += hist[i]; if (!wB || wB === lum.length) continue; sB += i * hist[i]; const mB = sB / wB, mF = (sum - sB) / (lum.length - wB), q = wB * (lum.length - wB) * (mB - mF) ** 2; if (q > best) { best = q; thr = i; } }
+    let above = 0; for (let i = thr + 1; i < 256; i++) above += hist[i];
+    const bright = above < lum.length / 2;
+    // variantes, sempre texto escuro sobre branco com margem branca: cinzento, preto/branco, polaridade ao contrário
+    const variant = mode => {
+      const c = document.createElement("canvas"); c.width = cw + 2 * pad; c.height = ch + 2 * pad;
+      const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height);
+      const im = x.createImageData(cw, ch), d = im.data;
+      for (let j = 0; j < lum.length; j++) {
+        const L = lum[j], o = mode === "bin" ? ((L > thr) === bright ? 0 : 255) : mode === "gray" ? (bright ? 255 - L : L) : (bright ? L : 255 - L);
+        d[4 * j] = d[4 * j + 1] = d[4 * j + 2] = o; d[4 * j + 3] = 255;
+      }
+      x.putImageData(im, pad, pad); return c;
+    };
     try {
-      const { data } = await ocr.worker.recognize(c);
-      const z = matchZone(data.text || "");
+      let z = -1, txt = "", used = null;
+      for (const mode of ["gray", "bin", "inv"]) {
+        const c = variant(mode), { data } = await ocr.worker.recognize(c);
+        txt = txt || (data.text || "").trim(); used = used || c;
+        z = matchZone(data.text || ""); if (z >= 0) { used = c; break; }
+      }
+      const pv = $("#ocrPrev"), pg = pv.getContext("2d"); pg.fillStyle = "#000"; pg.fillRect(0, 0, pv.width, pv.height);
+      pg.drawImage(used, 0, 0, pv.width, Math.min(pv.height, pv.width * used.height / used.width));
       if (z >= 0) {
         ocr.hits = z === ocr.last ? ocr.hits + 1 : 1; ocr.last = z;
-        $("#ocrStatus").innerHTML = `A ler: <b class="gold">${esc(ZONES[z][0])}</b>`;
+        $("#ocrStatus").innerHTML = `A ler: <b class="gold">${esc(ZONES[z][0])}</b>`; ocrMsg = "";
         if (ocr.hits === 2) onZoneSeen(z);
-      } else $("#ocrStatus").textContent = `Não reconheci («${(data.text || "").trim().slice(0, 40)}»). Ajusta a área até o nome aparecer no quadro preto.`;
+      } else { $("#ocrStatus").textContent = `Não reconheci («${txt.slice(0, 40)}»). Ajusta a área até o nome aparecer no quadro.`; ocrMsg = `Não leio o nome («${txt.slice(0, 24)}»)`; }
+      updateHere();
     } catch (e) { $("#ocrStatus").textContent = "Erro no OCR: " + e.message; }
   }
   (pip ? pip.window : window).setTimeout(ocrTick, 1500);
@@ -641,7 +668,7 @@ $("#ocrBtn").onclick = async () => {
     const worker = await Tesseract.createWorker("eng");
     await worker.setParameters({ tessedit_pageseg_mode: "7", tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' " });
     const video = document.createElement("video"); video.muted = true; video.srcObject = stream; await video.play();
-    ocr = { stream, video, worker, canvas: document.createElement("canvas"), last: -1, hits: 0 };
+    ocr = { stream, video, worker, canvas: document.createElement("canvas"), last: -1, hits: 0, cap: window.ImageCapture ? new ImageCapture(stream.getVideoTracks()[0]) : null };
     stream.getVideoTracks()[0].onended = () => { if (ocr) $("#ocrBtn").click(); };
     $("#ocrBtn").textContent = "Desligar leitura"; ocrTick();
   } catch (e) { $("#ocrStatus").textContent = "Não foi possível ligar: " + (e.message || e); }
