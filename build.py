@@ -27,3 +27,18 @@ out = [[z["displayName"], z["type"], round(z["position"][0], 1), round(z["positi
 html = open("index.html", encoding="utf-8").read().replace("__ZONES__", json.dumps(out, ensure_ascii=False, separators=(",", ":")))
 open("index.html", "w", encoding="utf-8").write(html)
 print(len(out), "zonas")
+
+# ---- outros sítios do jogo (world.json do ao-bin-dumps): mercados/bancos contam como a cidade; o resto é ignorado pelo OCR ----
+world = json.load(open(os.path.join(ZD, "world.json"), encoding="utf-8"))
+names = {z[0] for z in out}
+cities = {z[0]: i for i, z in enumerate(out) if z[1] == 1}
+extra = {}
+for w in world:
+    n = w["UniqueName"].strip()
+    if n in names or not re.fullmatch(r"[A-Za-z' .-]+", n) or len(n) < 5:
+        continue
+    city = next((c for c in cities if c in n and ("Market" in n or "Bank" in n)), None)
+    extra[n] = cities[city] if city else -1
+html = open("index.html", encoding="utf-8").read().replace("__EXTRA__", json.dumps(sorted(extra.items()), ensure_ascii=False, separators=(",", ":")))
+open("index.html", "w", encoding="utf-8").write(html)
+print(len(extra), "outros sitios,", sum(1 for v in extra.values() if v >= 0), "ligados a cidades")

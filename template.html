@@ -596,15 +596,17 @@ for (const k of OCR_KEYS) {
   $("#" + k).oninput = saveOcr;
 }
 const ZNORM = ZONES.map(z => z[0].toLowerCase().replace(/[^a-z' ]/g, ""));
+const EXTRA = __EXTRA__; // [nome, zona da cidade ou -1]: mercados/bancos = a cidade; o resto (ilhas, dungeons…) é ignorado
+const XNORM = EXTRA.map(x => x[0].toLowerCase().replace(/[^a-z' ]/g, ""));
 function lev(a, b) {
   const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
   let prev = Array.from({ length: n + 1 }, (_, j) => j);
   for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
   return prev[n];
 }
-function zoneScores(text) {
+function zoneScores(text, list = ZNORM) {
   const t = text.toLowerCase().replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim();
-  return ZNORM.map(z => {
+  return list.map(z => {
     if (!t || z.length > t.length + 3) return 0;
     let best = 0;
     for (let p = 0; p <= Math.max(0, t.length - z.length); p++) best = Math.max(best, 1 - lev(z, t.substr(p, z.length)) / z.length);
@@ -615,6 +617,13 @@ function zoneScores(text) {
 // desde que se destaque das outras vizinhas; longe disso, a leitura tem de ser quase perfeita.
 const priorZone = () => currentZone >= 0 ? currentZone : route ? route[routeStep] : zoneIdx($("#rFrom").value);
 function matchZone(text, strict = 0.8) {
+  const z = matchGraph(text, strict), sc = zoneScores(text), xs = zoneScores(text, XNORM);
+  // outro sítio conhecido (ex.: "Thetford Market") que bate melhor do que a zona escolhida?
+  let x = -1; xs.forEach((v, i) => { if (v >= 0.8 && (x < 0 || v * XNORM[i].length > xs[x] * XNORM[x].length)) x = i; });
+  if (x >= 0 && (z < 0 || xs[x] * XNORM[x].length > sc[z] * ZNORM[z].length)) return EXTRA[x][1];
+  return z;
+}
+function matchGraph(text, strict) {
   const sc = zoneScores(text), pz = priorZone();
   const order = ids => [...ids].sort((x, y) => sc[y] - sc[x] || ZNORM[y].length - ZNORM[x].length);
   if (pz >= 0) {
