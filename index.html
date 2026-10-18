@@ -77,6 +77,7 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:190px}
 @media(max-width:640px){.plcard{flex-wrap:wrap}.plp{width:100%;flex-direction:row;justify-content:space-between;align-items:center}}
 button.cp{border:1px solid var(--line);background:#120c07;color:var(--fg);border-radius:4px;padding:0 5px;margin-left:5px;font-size:12px;line-height:18px;cursor:pointer;vertical-align:1px}
 button.cp:hover{border-color:var(--gold)}button.cp.ok{color:var(--pos);border-color:var(--pos)}
+.cdot{cursor:help;font-size:13px;color:var(--mut)}.cdot.c0{color:#5cc27a}.cdot.c1{color:#e2c044}.cdot.c2{color:#ef6b5b}
 a.chart{color:inherit;text-decoration:none;border-bottom:1px dotted var(--mut)}a.chart:hover{color:var(--gold2)}
 #tRound th,#tRound td{text-align:left}#tRound td:nth-child(4),#tRound th:nth-child(4){text-align:right}
 .empty{text-align:center!important;padding:30px!important;color:var(--mut)}
@@ -193,7 +194,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
 </div>
 <div class="frame wrap"><table id="tOpp"><thead><tr>
   <th data-k="name">Item</th><th data-k="route" class="trip">Rota</th><th data-k="buy">Compra</th><th data-k="sell">Venda</th>
-  <th data-k="profit" title="Já com todas as taxas descontadas">Lucro/un.</th><th data-k="vol" title="Média dos últimos 7 dias. «vende até» = 20% disso: uma quantidade que costuma vender sem baixar o preço. Confirma no jogo quantas há em cada preço.">Vendas/dia</th><th data-k="day">Lucro/dia</th><th data-k="trip" class="trip">Por viagem</th><th></th></tr></thead><tbody></tbody></table></div>
+  <th data-k="profit" title="Já com todas as taxas descontadas">Lucro/un.</th><th data-k="vol" title="● verde = pouca concorrência, amarelo = média, vermelho = muito disputado. Média dos últimos 7 dias. «vende até» = 20% disso: uma quantidade que costuma vender sem baixar o preço. Confirma no jogo quantas há em cada preço.">Vendas/dia</th><th data-k="day">Lucro/dia</th><th data-k="trip" class="trip">Por viagem</th><th></th></tr></thead><tbody></tbody></table></div>
 </section>
 
 <section id="pRound" class="hide">
@@ -533,6 +534,41 @@ async function loadVolumes(rows) {
     await sleep(250);
   }
 }
+// ---- concorrência (estimativa simples): preço aos saltos ou muito volume = muitos flippers ----
+// histórico por hora das últimas 48 h; variação do preço = desvio-padrão / média
+const COMP = {}; // "id#q|loc" -> {cv} | null
+let compBusy = false;
+async function loadComp(rows) {
+  if (compBusy) return;
+  const need = {};
+  for (const r of rows.slice(0, 150)) { const k = r.key + "|" + r.to; if (!(k in COMP)) (need[r.to + "|" + r.q] ||= new Set()).add(r.id); }
+  if (!Object.keys(need).length) return;
+  compBusy = true;
+  try {
+    for (const [lq, ids] of Object.entries(need)) {
+      const [loc, q] = lq.split("|");
+      for (const b of batches([...ids])) {
+        for (const id of b) COMP[id + "#" + q + "|" + loc] = null;
+        for (const h of await getJSON(`${HOST}/api/v2/stats/history/${b.join(",")}?locations=${encodeURIComponent(loc)}&qualities=${q}&time-scale=1`)) {
+          const ys = h.data.filter(p => ageH(p.timestamp) <= 48).map(p => p.avg_price).filter(Boolean);
+          if (ys.length < 4) continue;
+          const m = ys.reduce((a, b) => a + b, 0) / ys.length, sd = Math.sqrt(ys.reduce((a, y) => a + (y - m) ** 2, 0) / ys.length);
+          COMP[h.item_id + "#" + q + "|" + loc] = { cv: sd / m };
+        }
+        await sleep(250);
+      }
+    }
+  } finally { compBusy = false; }
+  render(false);
+}
+function compDot(r) {
+  const c = COMP[r.key + "|" + r.to];
+  if (c === undefined) return `<span class="cdot" title="A ver a concorrência…">·</span>`;
+  if (c === null) return "";
+  const level = c.cv >= 0.08 || r.vol >= 1000 ? 2 : c.cv < 0.04 && r.vol < 300 ? 0 : 1;
+  const txt = ["Pouca concorrência: preço calmo e pouco disputado", "Concorrência média", "Muito disputado: preço aos saltos ou muita gente a negociar"][level];
+  return `<span class="cdot c${level}" title="${txt} (variação do preço nas últimas 48 h: ${(c.cv * 100).toLocaleString("pt-PT", { maximumFractionDigits: 1 })}%)">●</span>`;
+}
 let sortK = "day", sortDir = -1, rendering = false;
 function applySortBy() {
   const v = $("#sortBy").value;
@@ -571,7 +607,7 @@ async function render(fetchVol = true) {
     <td>${fmt(r.buy)}${sub(buyL)}</td>
     <td>${fmt(r.sell)}${sub(`${sellL(r)} · média ${fmt(r.avg)}`)}</td>
     <td class="pos" title="${feeTip(r.buy, s.buyMode, r.sell, r.sellMode)}"><b>${fmt(r.profit)}</b>${sub(`ROI ${(r.roi * 100).toFixed(0)}%`)}${r.roi > 1 || r.buy < r.avg * 0.4 || r.sell > r.avg * 1.3 ? `<small class="warn" title="Margem muito alta: pode haver só 1 ou 2 unidades a este preço, ou o preço já mudou. Confirma no jogo antes de comprar muitas.">⚠ confirma no jogo</small>` : ""}</td>
-    <td>${fmt(r.vol)}${sub(`vende até ~${fmt(suggestQty(r.vol))}`)}</td>
+    <td>${fmt(r.vol)} ${compDot(r)}${sub(`vende até ~${fmt(suggestQty(r.vol))}`)}</td>
     <td class="gold">${fmt(r.day)}</td>
     <td class="trip">${r.trip == null ? `<span class="mut">${r.w == null ? "sem peso" : "põe a carga"}</span>` : `<b class="gold">${fmt(r.trip)}</b>${sub(`${fmt(r.units)} un. × ${r.w.toLocaleString("pt-PT")} kg`)}`}</td>
     <td class="acts"><button class="btn2" data-buy="${esc(r.id)}" data-q="${r.q}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button>
@@ -579,6 +615,7 @@ async function render(fetchVol = true) {
     || `<tr><td colspan="9" class="mut" style="text-align:center;padding:30px">Nada com lucro com estes filtros.</td></tr>`;
   $("#status").textContent = `${rows.length} oportunidades · mercado lido às ${new Date(loadedAt).toLocaleTimeString("pt-PT")}`;
   checkAlerts(rows);
+  loadComp(rows); // concorrência das linhas visíveis (depois volta a desenhar)
 }
 document.querySelectorAll("#tOpp th[data-k]").forEach(th => th.onclick = () => { sortDir = sortK === th.dataset.k ? -sortDir : -1; sortK = th.dataset.k; render(false); });
 $("#tOpp").onclick = e => {
