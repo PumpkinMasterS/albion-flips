@@ -12,6 +12,7 @@ blob = json.dumps(names, ensure_ascii=False).replace("</", "<" + chr(92) + "/")
 html = open("template.html", encoding="utf-8").read().replace("__NAMES__", blob)
 open("index.html", "w", encoding="utf-8").write(html)
 print(len(names), "items")
+names_pt = dict(names)  # "names" é reutilizado mais abaixo para as zonas
 
 # ---- zonas (rotas): Albion Navigator zoneData.json + tiers de albionroads maps.json ----
 import os, re
@@ -93,3 +94,32 @@ for cat, v in raw["items"].items():
 html = open("index.html", encoding="utf-8").read().replace("__WEIGHTS__", json.dumps(weights, separators=(",", ":")))
 open("index.html", "w", encoding="utf-8").write(html)
 print(len(weights), "pesos")
+
+# ---- receitas de crafting/refino (items.json cru): [id de mercado, categoria, quantidade feita, [[material, qtd, devolvível]]] ----
+def as_list(x): return x if isinstance(x, list) else [x] if x else []
+def mkt(uid, lvl): return uid + (f"@{lvl}" if int(lvl or 0) > 0 else "")
+def cat_of(it):
+    sc, sub = it.get("@shopcategory", ""), it.get("@shopsubcategory1", "")
+    if sub == "refinedresources": return "refino"
+    if sc == "consumables": return "consumo"
+    if sc in ("melee", "ranged", "magic", "armor", "offhand", "accessories", "gatherergear", "tools") or it.get("@slottype"): return "equip"
+    return "outros"
+def recipe(req):
+    for c in as_list(req):
+        res = [[mkt(r["@uniquename"], r.get("@enchantmentlevel")), int(r["@count"]), 0 if r.get("@maxreturnamount") == "0" else 1] for r in as_list(c.get("craftresource"))]
+        if res: return int(c.get("@amountcrafted", 1) or 1), res
+    return None
+recipes = []
+for cat, v in raw["items"].items():
+    for it in as_list(v):
+        if not isinstance(it, dict) or not it.get("@uniquename"): continue
+        uid = it["@uniquename"]; base = mkt(uid, it.get("@enchantmentlevel"))
+        r = recipe(it.get("craftingrequirements"))
+        if r and base in names_pt: recipes.append([base, cat_of(it), r[0], r[1]])
+        for en in as_list((it.get("enchantments") or {}).get("enchantment")):
+            r = recipe(en.get("craftingrequirements")); eid = f"{uid}@{en['@enchantmentlevel']}"
+            if r and eid in names_pt: recipes.append([eid, cat_of(it), r[0], r[1]])
+html = open("index.html", encoding="utf-8").read().replace("__RECIPES__", json.dumps(recipes, separators=(",", ":")))
+open("index.html", "w", encoding="utf-8").write(html)
+import collections
+print(len(recipes), "receitas", dict(collections.Counter(r[1] for r in recipes)))
