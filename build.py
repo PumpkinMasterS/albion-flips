@@ -1,6 +1,8 @@
 """Build index.html from template.html + Portuguese item names (ao-bin-dumps items.json)."""
 import json, sys, urllib.request
-src = sys.argv[1] if len(sys.argv) > 1 else "https://raw.githubusercontent.com/ao-data/ao-bin-dumps/master/formatted/items.json"
+import os
+# sem argumentos usa as cópias locais em data/ (fora do git); apaga data/ e passa URLs para ir buscar versões novas do jogo
+src = sys.argv[1] if len(sys.argv) > 1 else ("data/items.json" if os.path.exists("data/items.json") else "https://raw.githubusercontent.com/ao-data/ao-bin-dumps/master/formatted/items.json")
 items = json.load(open(src, encoding="utf-8")) if not src.startswith("http") else json.load(urllib.request.urlopen(src))
 names = {}
 for x in items:
@@ -16,7 +18,7 @@ names_pt = dict(names)  # "names" é reutilizado mais abaixo para as zonas
 
 # ---- zonas (rotas): Albion Navigator zoneData.json + tiers de albionroads maps.json ----
 import os, re
-ZD = os.environ.get("ZONEDATA", "zonedata")
+ZD = os.environ.get("ZONEDATA", "data/zonedata")
 zones = json.load(open(os.path.join(ZD, "zoneData.json"), encoding="utf-8"))
 maps = json.load(open(os.path.join(ZD, "maps.json"), encoding="utf-8"))
 norm = lambda s: re.sub(r"[^a-z]", "", s.lower())
@@ -84,7 +86,7 @@ open("index.html", "w", encoding="utf-8").write(html)
 print(len(roads), "roads")
 
 # ---- peso de cada item (items.json "cru" do ao-bin-dumps; os encantamentos @n pesam o mesmo que o item base) ----
-raw_src = os.environ.get("ITEMS_FULL", "https://raw.githubusercontent.com/ao-data/ao-bin-dumps/master/items.json")
+raw_src = os.environ.get("ITEMS_FULL", "data/items_full.json" if os.path.exists("data/items_full.json") else "https://raw.githubusercontent.com/ao-data/ao-bin-dumps/master/items.json")
 raw = json.load(open(raw_src, encoding="utf-8")) if not raw_src.startswith("http") else json.load(urllib.request.urlopen(raw_src))
 weights = {}
 for cat, v in raw["items"].items():
