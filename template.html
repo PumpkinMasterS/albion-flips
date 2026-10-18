@@ -75,6 +75,8 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:190px}
 .plp{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px}.plp b{font:800 20px Cinzel,serif}
 .pltotal{font-size:16px;margin:6px 2px}.pltotal b{font:800 22px Cinzel,serif}
 @media(max-width:640px){.plcard{flex-wrap:wrap}.plp{width:100%;flex-direction:row;justify-content:space-between;align-items:center}}
+button.cp{border:1px solid var(--line);background:#120c07;color:var(--fg);border-radius:4px;padding:0 5px;margin-left:5px;font-size:12px;line-height:18px;cursor:pointer;vertical-align:1px}
+button.cp:hover{border-color:var(--gold)}button.cp.ok{color:var(--pos);border-color:var(--pos)}
 a.chart{color:inherit;text-decoration:none;border-bottom:1px dotted var(--mut)}a.chart:hover{color:var(--gold2)}
 #tRound th,#tRound td{text-align:left}#tRound td:nth-child(4),#tRound th:nth-child(4){text-align:right}
 .empty{text-align:center!important;padding:30px!important;color:var(--mut)}
@@ -142,6 +144,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
   <button data-tab="bm">Mercado Negro</button>
   <button data-tab="round">Ida e volta</button>
   <button data-tab="craft">Crafting</button>
+  <button data-tab="ench">Encantar</button>
   <button data-tab="route">Rotas</button>
   <button data-tab="trades">As minhas trocas</button>
 </nav>
@@ -150,6 +153,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
 <div class="frame">
   <div class="bar">
     <label>Prata para investir<input id="plSilver" type="number" placeholder="ex.: 2000000" style="width:150px"></label>
+    <label title="Valores aproximados. O certo é a carga máxima nos teus stats do jogo.">Montaria<select class="mount" data-for="plCap"><option value="">Montaria…</option><option value="600">Sem montaria (~600 kg)</option><option value="520">Cavalo T3 (~520 kg)</option><option value="1200">Boi T3 (~1 200 kg)</option><option value="1600">Boi T4 (~1 600 kg)</option><option value="2000">Boi T5 (~2 000 kg)</option><option value="2400">Boi T6 (~2 400 kg)</option><option value="2667">Boi T7 (~2 667 kg)</option><option value="3200">Boi T8 (~3 200 kg)</option><option value="1600">Veado Gigante T7 (~1 600 kg)</option><option value="2200">Urso Pardo T7 (~2 200 kg)</option><option value="22521">Mamute T8 (~22 500 kg)</option></select></label>
     <label title="A carga máxima dos stats (com montaria e bolsa) menos o que já levas. Vazio = sem viagens.">Carga livre (kg)<input id="plCap" type="number" placeholder="vazio = sem viagens" style="width:150px"></label>
     <label title="Espaços vazios no inventário. Equipamento ocupa 1 espaço por unidade.">Espaços livres<input id="plSlots" type="number" value="40" style="width:90px"></label>
     <label>Estou em<select id="plCity"></select></label>
@@ -168,6 +172,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
     <label id="fBuy">Compra<select id="buyMode"><option value="order">Buy order</option><option value="instant">Imediata</option></select></label>
     <label id="fSell">Venda<select id="sellMode"><option value="order">Sell order</option><option value="instant">Imediata</option></select></label>
     <span class="sep tripf"></span>
+    <label class="tripf" title="Valores aproximados. O certo é a carga máxima nos teus stats do jogo.">Montaria<select class="mount" data-for="cap"><option value="">Montaria…</option><option value="600">Sem montaria (~600 kg)</option><option value="520">Cavalo T3 (~520 kg)</option><option value="1200">Boi T3 (~1 200 kg)</option><option value="1600">Boi T4 (~1 600 kg)</option><option value="2000">Boi T5 (~2 000 kg)</option><option value="2400">Boi T6 (~2 400 kg)</option><option value="2667">Boi T7 (~2 667 kg)</option><option value="3200">Boi T8 (~3 200 kg)</option><option value="1600">Veado Gigante T7 (~1 600 kg)</option><option value="2200">Urso Pardo T7 (~2 200 kg)</option><option value="22521">Mamute T8 (~22 500 kg)</option></select></label>
     <label class="tripf" title="A carga máxima dos stats (com montaria e bolsa equipadas) menos o que já levas">Carga livre (kg)<input id="cap" type="number" placeholder="ex.: 2500"></label>
     <label class="tripf">Prata a investir<input id="silver" type="number" placeholder="sem limite"></label>
     <label class="tripf" title="Espaços vazios no inventário (e na montaria). Equipamento ocupa 1 espaço por unidade; recursos e comida empilham até 999.">Espaços livres<input id="slots" type="number" value="40" style="width:80px"></label>
@@ -195,6 +200,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
 <div class="frame">
   <div class="bar">
     <label>Cidade base<select id="rtHome"></select></label>
+    <label title="Valores aproximados. O certo é a carga máxima nos teus stats do jogo.">Montaria<select class="mount" data-for="rtCap"><option value="">Montaria…</option><option value="600">Sem montaria (~600 kg)</option><option value="520">Cavalo T3 (~520 kg)</option><option value="1200">Boi T3 (~1 200 kg)</option><option value="1600">Boi T4 (~1 600 kg)</option><option value="2000">Boi T5 (~2 000 kg)</option><option value="2400">Boi T6 (~2 400 kg)</option><option value="2667">Boi T7 (~2 667 kg)</option><option value="3200">Boi T8 (~3 200 kg)</option><option value="1600">Veado Gigante T7 (~1 600 kg)</option><option value="2200">Urso Pardo T7 (~2 200 kg)</option><option value="22521">Mamute T8 (~22 500 kg)</option></select></label>
     <label>Carga livre (kg)<input id="rtCap" type="number" placeholder="ex.: 2500"></label>
     <label>Prata a investir<input id="rtSilver" type="number" placeholder="sem limite"></label>
     <label>Espaços livres<input id="rtSlots" type="number" value="40" style="width:80px"></label>
@@ -202,6 +208,24 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
   <div class="hint">ⓘ Para cada par de cidades: a carga mais lucrativa para <b>ir</b> e a mais lucrativa para <b>voltar</b>, para nunca viajares vazio. Compra imediata, venda por sell order (ao Mercado Negro, imediata; volta-se de Caerleon).</div>
 </div>
 <div class="frame wrap"><table id="tRound"><thead><tr><th>Viagem</th><th>Ida</th><th>Volta</th><th>Lucro total</th><th></th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section id="pEnch" class="hide">
+<div class="frame">
+  <div class="bar">
+    <label>Comprar em<select id="eFrom"></select></label>
+    <label>Item<select id="eBuy"><option value="instant">Compra imediata</option><option value="order">Buy order</option></select></label>
+    <label>Runas/almas/relíquias<select id="eMat"><option value="instant">Compra imediata</option><option value="order">Buy order</option></select></label>
+    <span class="sep"></span>
+    <label>Vender em<select id="eTo"></select></label>
+    <label>Venda<select id="eSell"><option value="order">Sell order</option><option value="instant">Imediata</option></select></label>
+    <span style="flex:1"></span>
+    <label>Procurar<input id="eq" placeholder="item"></label>
+    <label>Ordenar<select id="eSort"><option value="day">Lucro/dia</option><option value="profit">Lucro/un.</option><option value="roi">ROI</option></select></label>
+  </div>
+  <div class="hint">ⓘ Compras o item, sobes um nível de encantamento na Fundição de Artefactos (.0→.1 com <b>runas</b>, .1→.2 com <b>almas</b>, .2→.3 com <b>relíquias</b>) e vendes mais caro. A qualidade mantém-se.</div>
+</div>
+<div class="frame wrap"><table id="tEnch"><thead><tr><th>Item</th><th>Comprar</th><th>Materiais</th><th>Vender</th><th>Lucro/un.</th><th>Vendas/dia</th><th>Lucro/dia</th></tr></thead><tbody></tbody></table></div>
 </section>
 
 <section id="pCraft" class="hide">
@@ -340,6 +364,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 const fmt = n => n == null || !isFinite(n) ? "—" : Math.round(n).toLocaleString("pt-PT");
 const tierOf = id => { const t = id.match(/^T(\d)/), e = id.match(/@(\d)/); return t ? t[1] + "." + (e ? e[1] : "0") : "—"; };
 const nameOf = id => NAMES[id] || id;
+const cp = name => `<button class="cp" data-copy="${esc(name)}" title="Copiar o nome para colar no jogo">📋</button>`;
 const icon = (id, q = 1) => `https://render.albiononline.com/v1/item/${encodeURIComponent(id)}.png?size=40&quality=${q}`;
 const QUAL = { 1: "Normal", 2: "Bom", 3: "Notável", 4: "Excelente", 5: "Obra-prima" };
 const cityLabel = c => c === BM ? "Mercado Negro" : c;
@@ -409,11 +434,12 @@ for (const id of ["from", "to", "buyMode", "sellMode"]) $("#" + id).onchange = (
 for (const id of PREF_KEYS.concat("q")) if (id !== "sortBy") $("#" + id).oninput = () => { savePrefs(); if (id === "cap") applySortBy(); render(); renderTrades(); };
 let view = "plan"; // separador visível
 const OPP_TABS = ["city", "trans", "bm"];
-const PANES = { plan: "pPlan", craft: "pCraft", round: "pRound", route: "pRoute", trades: "pTrades" };
+const PANES = { plan: "pPlan", ench: "pEnch", craft: "pCraft", round: "pRound", route: "pRoute", trades: "pTrades" };
 function refreshView() {
   if (OPP_TABS.includes(view)) return render(true);
   if (view === "plan") return renderPlan();
   if (view === "craft") return renderCraft();
+  if (view === "ench") return renderEnch();
   if (view === "round") return renderRound();
   if (view === "trades") return refreshMarket();
   if (view === "route") return renderRoute();
@@ -540,7 +566,7 @@ async function render(fetchVol = true) {
   const buyL = s.buyMode === "order" ? "buy order" : "imediata", sellL = r => r.sellMode === "order" ? "sell order" : "imediata";
   const sub = t => `<small class="mut" style="display:block">${t}</small>`;
   $("#tOpp tbody").innerHTML = rows.map(r => `<tr>
-    <td class="item"><div class="it"><img loading="lazy" src="${icon(r.id, r.q)}" alt=""><div><a href="#" class="chart" data-key="${esc(r.key)}" data-loc="${esc(r.to)}" title="Ver os últimos 7 dias">${esc(r.name)}</a> <span class="tier t${r.tier[0]}">${r.tier}</span>${r.q > 1 ? ` <span class="qual q${r.q}">${QUAL[r.q]}</span>` : ""}<small title="${esc(r.id)}">dados de há ${r.ageH.toFixed(1)} h</small></div></div></td>
+    <td class="item"><div class="it"><img loading="lazy" src="${icon(r.id, r.q)}" alt=""><div><a href="#" class="chart" data-key="${esc(r.key)}" data-loc="${esc(r.to)}" title="Ver os últimos 7 dias">${esc(r.name)}</a> <span class="tier t${r.tier[0]}">${r.tier}</span>${cp(r.name)}${r.q > 1 ? ` <span class="qual q${r.q}">${QUAL[r.q]}</span>` : ""}<small title="${esc(r.id)}">dados de há ${r.ageH.toFixed(1)} h</small></div></div></td>
     <td class="trip">${r.from === r.to ? `<span class="city">${esc(r.from)}</span>` : `<span class="city">${esc(r.from)}</span><span class="arrow">➜</span><span class="city">${esc(cityLabel(r.to))}</span>`}</td>
     <td>${fmt(r.buy)}${sub(buyL)}</td>
     <td>${fmt(r.sell)}${sub(`${sellL(r)} · média ${fmt(r.avg)}`)}</td>
@@ -622,7 +648,7 @@ function renderTrades() {
   $("#tTrades tbody").innerHTML = trades.map((t, i) => {
     const m = market[tkey(t) + "|" + t.sellCity], sold = t.sell != null, p = sold ? net(t, t.sell) : m ? net(t, m) : null;
     if (sold) { done += p; n++; } else { openCost += t.buy * t.qty; if (p != null) openVal += p; }
-    return `<tr><td class="item"><div class="it"><img loading="lazy" src="${icon(t.id, t.q || 1)}" alt=""><div>${esc(nameOf(t.id))}<small>${tierOf(t.id)}${(t.q || 1) > 1 ? " · " + QUAL[t.q] : ""}</small></div></div></td>
+    return `<tr><td class="item"><div class="it"><img loading="lazy" src="${icon(t.id, t.q || 1)}" alt=""><div>${esc(nameOf(t.id))}${cp(nameOf(t.id))}<small>${tierOf(t.id)}${(t.q || 1) > 1 ? " · " + QUAL[t.q] : ""}</small></div></div></td>
       <td>${new Date(t.at).toLocaleDateString("pt-PT")}</td>
       <td><span class="city">${esc(t.city)}</span>${t.sellCity !== t.city ? `<span class="arrow">➜</span><span class="city">${esc(cityLabel(t.sellCity))}</span>` : ""}</td>
       <td>${t.qty}</td><td>${fmt(t.buy)}</td><td>${fmt(m)}</td><td>${sold ? fmt(t.sell) : "—"}</td>
@@ -1080,13 +1106,16 @@ function craftRows() {
   return out;
 }
 let craftBusy = false;
+let craftBusyAgain = false;
 async function renderCraft(fetchVol = true) {
+  if (craftBusy) { craftBusyAgain = true; return; }
   if (!loadedAt) { $("#tCraft tbody").innerHTML = `<tr><td colspan="7" class="empty">Carrega em «Atualizar mercado» primeiro.</td></tr>`; return; }
   saveCraft();
   let rows = craftRows();
   if (fetchVol && !craftBusy && rows.some(r => !((r.key + "|" + r.to) in VOL))) {
     craftBusy = true;
     try { await loadVolumes(rows.sort((a, b) => b.profit - a.profit).slice(0, 4000)); } finally { craftBusy = false; setProg(0); }
+    if (craftBusyAgain) { craftBusyAgain = false; return renderCraft(); }
     return renderCraft(false);
   }
   const minVol = +$("#minVol").value || 0, sk = $("#cSort").value;
@@ -1096,8 +1125,8 @@ async function renderCraft(fetchVol = true) {
     .sort((a, b) => b[sk] - a[sk]).slice(0, 200);
   const sub = t => `<small class="mut" style="display:block">${t}</small>`;
   $("#tCraft tbody").innerHTML = rows.map(r => `<tr>
-    <td class="item"><div class="it"><img loading="lazy" src="${icon(r.id)}" alt=""><div><a href="#" class="chart" data-key="${esc(r.key)}" data-loc="${esc(r.to)}">${esc(nameOf(r.id))}</a> <span class="tier t${tierOf(r.id)[0]}">${tierOf(r.id)}</span>${r.amount > 1 ? ` <span class="mut">×${r.amount}</span>` : ""}<small>dados de há ${r.ageH.toFixed(1)} h</small></div></div></td>
-    <td class="mats">${r.mats.map(m => `<div><img loading="lazy" src="${icon(m.m)}" alt=""><span>${m.n}× ${esc(nameOf(m.m))}</span><span class="mut">${fmt(m.p)}${$("#cFrom").value === "*" ? " · " + esc(m.c) : ""}${m.back ? "" : " · não volta"}</span></div>`).join("")}</td>
+    <td class="item"><div class="it"><img loading="lazy" src="${icon(r.id)}" alt=""><div><a href="#" class="chart" data-key="${esc(r.key)}" data-loc="${esc(r.to)}">${esc(nameOf(r.id))}</a> <span class="tier t${tierOf(r.id)[0]}">${tierOf(r.id)}</span>${cp(nameOf(r.id))}${r.amount > 1 ? ` <span class="mut">×${r.amount}</span>` : ""}<small>dados de há ${r.ageH.toFixed(1)} h</small></div></div></td>
+    <td class="mats">${r.mats.map(m => `<div><img loading="lazy" src="${icon(m.m)}" alt=""><span>${m.n}× ${esc(nameOf(m.m))}${cp(nameOf(m.m))}</span><span class="mut">${fmt(m.p)}${$("#cFrom").value === "*" ? " · " + esc(m.c) : ""}${m.back ? "" : " · não volta"}</span></div>`).join("")}</td>
     <td>${fmt(r.unit)}${sub("com retorno")}</td>
     <td>${fmt(r.sell)}${sub(`${r.sellMode === "order" ? "sell order" : "imediata"} · média ${fmt(r.avg)}`)}</td>
     <td class="pos"><b>${fmt(r.profit)}</b>${sub(`ROI ${(r.roi * 100).toFixed(0)}%`)}${r.roi > 1 || r.sell > r.avg * 1.3 ? `<small class="warn" title="Margem muito alta: confirma os preços no jogo.">⚠ confirma no jogo</small>` : ""}</td>
@@ -1116,7 +1145,9 @@ function tripOf(r, buyMode) {
   return { ...r, w, units, trip: units * r.profit };
 }
 let roundBusy = false;
+let roundBusyAgain = false;
 async function renderRound(fetchVol = true) {
+  if (roundBusy) { roundBusyAgain = true; return; }
   if (!loadedAt) { $("#tRound tbody").innerHTML = `<tr><td colspan="5" class="empty">Carrega em «Atualizar mercado» primeiro.</td></tr>`; return; }
   if (!+$("#cap").value) { $("#tRound tbody").innerHTML = `<tr><td colspan="5" class="empty">Preenche a <b>carga livre</b> (em «Entre cidades») para calcular as viagens.</td></tr>`; return; }
   const maxAge = +$("#age").value || 6, home = $("#rtHome").value;
@@ -1125,6 +1156,7 @@ async function renderRound(fetchVol = true) {
   if (fetchVol && !roundBusy && rows.some(r => !((r.key + "|" + r.to) in VOL))) {
     roundBusy = true;
     try { await loadVolumes(rows.sort((a, b) => b.profit - a.profit).slice(0, 6000)); } finally { roundBusy = false; setProg(0); }
+    if (roundBusyAgain) { roundBusyAgain = false; return renderRound(); }
     return renderRound(false);
   }
   const best = {}; // "A>B" -> [melhores cargas]
@@ -1147,7 +1179,7 @@ async function renderRound(fetchVol = true) {
     pairs.push({ a, b, back, go, ret, total: (go?.trip || 0) + (ret?.trip || 0) });
   }
   pairs.sort((x, y) => y.total - x.total);
-  const cell = r => r ? `<div class="it"><img loading="lazy" src="${icon(r.id, r.q)}" alt=""><div>${esc(nameOf(r.id))} <span class="tier t${tierOf(r.id)[0]}">${tierOf(r.id)}</span>${r.q > 1 ? ` <span class="qual q${r.q}">${QUAL[r.q]}</span>` : ""}
+  const cell = r => r ? `<div class="it"><img loading="lazy" src="${icon(r.id, r.q)}" alt=""><div>${esc(nameOf(r.id))} <span class="tier t${tierOf(r.id)[0]}">${tierOf(r.id)}</span>${cp(nameOf(r.id))}${r.q > 1 ? ` <span class="qual q${r.q}">${QUAL[r.q]}</span>` : ""}
       <small>${fmt(r.units)} un. · compra ${fmt(r.buy)} → vende ${fmt(r.sell)}</small><b class="gold">${fmt(r.trip)}</b></div></div>` : `<span class="mut">vazio</span>`;
   $("#tRound tbody").innerHTML = pairs.slice(0, 60).map(p => `<tr>
     <td><span class="city">${esc(p.a)}</span><span class="arrow">⇄</span><span class="city">${esc(cityLabel(p.b))}</span></td>
@@ -1304,7 +1336,7 @@ async function renderPlan() {
   }
   const total = steps.reduce((a, s) => a + s.profit, 0);
   $("#status").textContent = `Plano feito · mercado lido às ${new Date(loadedAt).toLocaleTimeString("pt-PT")}`;
-  const item = r => `<img src="${icon(r.id, r.q)}" alt=""><b>${esc(nameOf(r.id))}</b> <span class="tier t${tierOf(r.id)[0]}">${tierOf(r.id)}</span>${r.q > 1 ? ` <span class="qual q${r.q}">${QUAL[r.q]}</span>` : ""}`;
+  const item = r => `<img src="${icon(r.id, r.q)}" alt=""><b>${esc(nameOf(r.id))}</b> <span class="tier t${tierOf(r.id)[0]}">${tierOf(r.id)}</span>${cp(nameOf(r.id))}${r.q > 1 ? ` <span class="qual q${r.q}">${QUAL[r.q]}</span>` : ""}`;
   const card = (s, i) => {
     const r = s.r, where = { go: `🐂 Leva para <b>${esc(cityLabel(r.to))}</b>`, back: `↩️ Traz de volta de <b>${esc(r.from)}</b> para <b>${esc(home)}</b>`, flip: `⚖️ Flip aqui em <b>${esc(home)}</b>` }[s.kind];
     const how = s.kind === "flip"
@@ -1337,6 +1369,68 @@ let installEvt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; $("#install").classList.remove("hide"); });
 window.addEventListener("appinstalled", () => $("#install").classList.add("hide"));
 $("#install").onclick = async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $("#install").classList.add("hide"); };
+
+// ---------- encantar: comprar .n, subir para .n+1 com runas/almas/relíquias, vender ----------
+const UPGRADES = __UPGRADES__; // [item .n+1, item .n, material, quantidade]
+const ENCH_KEYS = ["eFrom", "eBuy", "eMat", "eTo", "eSell", "eSort"];
+sel($("#eFrom"), CITIES.map(c => [c, c])); sel($("#eTo"), [...CITIES.map(c => [c, c]), [BM, "Mercado Negro"]]);
+{ const ep = store.get("ench", {}); for (const k of ENCH_KEYS) if (ep[k] != null) $("#" + k).value = ep[k]; }
+let enchBusy = false;
+let enchBusyAgain = false;
+async function renderEnch(fetchVol = true) {
+  if (enchBusy) { enchBusyAgain = true; return; }
+  if (!loadedAt) { $("#tEnch tbody").innerHTML = `<tr><td colspan="7" class="empty">Carrega em «Atualizar mercado» primeiro.</td></tr>`; return; }
+  store.set("ench", Object.fromEntries(ENCH_KEYS.map(k => [k, $("#" + k).value])));
+  const from = $("#eFrom").value, to = $("#eTo").value, bm = $("#eBuy").value, mm = $("#eMat").value, sm = to === BM ? "instant" : $("#eSell").value;
+  $("#eSell").disabled = to === BM;
+  const maxAge = +$("#age").value || 6, q = $("#eq").value.trim().toLowerCase();
+  let rows = [];
+  for (const [hi, lo, mat, n] of UPGRADES) {
+    if (q && !nameOf(hi).toLowerCase().includes(q)) continue;
+    const mp = matPrice(mat, from, mm, maxAge); if (!mp) continue;
+    for (let ql = 1; ql <= 5; ql++) {
+      const o = P[lo + "#" + ql]?.[from], d = P[hi + "#" + ql]?.[to]; if (!o || !d) continue;
+      const bp = bm === "order" ? (o.b && ageH(o.bd) <= maxAge ? o.b + 1 : 0) : (o.s && ageH(o.sd) <= maxAge ? o.s : 0);
+      const sp = sm === "order" ? (d.s && ageH(d.sd) <= maxAge ? d.s - 1 : 0) : (d.b && ageH(d.bd) <= maxAge ? d.b : 0);
+      if (!bp || !sp) continue;
+      const cost = buyCost(bp, bm) + buyCost(mp[0], mm) * n, profit = sellNet(sp, sm) - cost;
+      if (profit <= 0 || profit / cost >= 3) continue;
+      rows.push({ id: hi, lo, q: ql, key: hi + "#" + ql, to, buy: bp, sell: sp, sellMode: sm, mat, n, mp: mp[0], cost, profit, roi: profit / cost });
+    }
+  }
+  if (fetchVol && !enchBusy && rows.some(r => !((r.key + "|" + r.to) in VOL))) {
+    enchBusy = true;
+    try { await loadVolumes(rows.sort((a, b) => b.profit - a.profit).slice(0, 4000)); } finally { enchBusy = false; setProg(0); }
+    if (enchBusyAgain) { enchBusyAgain = false; return renderEnch(); }
+    return renderEnch(false);
+  }
+  const minVol = +$("#minVol").value || 0, sk = $("#eSort").value;
+  rows = rows.map(r => ({ ...r, ...(VOL[r.key + "|" + r.to] || {}) }))
+    .filter(r => r.vol != null && r.vol >= minVol && (r.sellMode === "instant" || r.sell <= r.avg * 1.2))
+    .map(r => ({ ...r, day: r.profit * Math.min(r.vol * 0.1, 50) })).sort((a, b) => b[sk] - a[sk]).slice(0, 200);
+  const sub = t => `<small class="mut" style="display:block">${t}</small>`;
+  const nm = (id, ql) => `<div class="it"><img loading="lazy" src="${icon(id, ql)}" alt=""><div>${esc(nameOf(id))} <span class="tier t${tierOf(id)[0]}">${tierOf(id)}</span>${cp(nameOf(id))}${ql > 1 ? ` <span class="qual q${ql}">${QUAL[ql]}</span>` : ""}</div></div>`;
+  $("#tEnch tbody").innerHTML = rows.map(r => `<tr>
+    <td class="item"><a href="#" class="chart" data-key="${esc(r.key)}" data-loc="${esc(r.to)}" style="border:0">${nm(r.id, r.q)}</a></td>
+    <td class="item">${nm(r.lo, r.q)}${sub(`${fmt(r.buy)} · ${$("#eBuy").value === "order" ? "buy order" : "imediata"}`)}</td>
+    <td class="mats"><div><img loading="lazy" src="${icon(r.mat)}" alt=""><span>${r.n}× ${esc(nameOf(r.mat))}${cp(nameOf(r.mat))}</span><span class="mut">${fmt(r.mp)}/un.</span></div></td>
+    <td>${fmt(r.sell)}${sub(`${r.sellMode === "order" ? "sell order" : "imediata"} · média ${fmt(r.avg)}`)}</td>
+    <td class="pos"><b>${fmt(r.profit)}</b>${sub(`ROI ${(r.roi * 100).toFixed(0)}%`)}${r.roi > 1 || r.sell > r.avg * 1.3 ? `<small class="warn" title="Margem muito alta: confirma no jogo.">⚠ confirma no jogo</small>` : ""}</td>
+    <td>${fmt(r.vol)}${sub(`vende até ~${fmt(suggestQty(r.vol))}`)}</td>
+    <td class="gold">${fmt(r.day)}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">Nada com lucro com estas opções.</td></tr>`;
+  $("#status").textContent = `${rows.length} encantamentos com lucro · mercado lido às ${new Date(loadedAt).toLocaleTimeString("pt-PT")}`;
+}
+for (const k of ENCH_KEYS.concat("eq")) $("#" + k).oninput = $("#" + k).onchange = () => renderEnch();
+
+// montaria escolhida -> preenche a carga livre
+document.querySelectorAll("select.mount").forEach(m => m.onchange = () => { if (!m.value) return; const f = $("#" + m.dataset.for); f.value = m.value; f.dispatchEvent(new Event("input")); f.dispatchEvent(new Event("change")); });
+// copiar nome
+document.addEventListener("click", async e => {
+  const b = e.target.closest("button.cp"); if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  try { await navigator.clipboard.writeText(b.dataset.copy); } catch { const t = document.createElement("textarea"); t.value = b.dataset.copy; document.body.append(t); t.select(); document.execCommand("copy"); t.remove(); }
+  b.textContent = "✓"; b.classList.add("ok"); setTimeout(() => { b.textContent = "📋"; b.classList.remove("ok"); }, 1200);
+}, true);
 
 applyTab(); renderTrades();
 </script>

@@ -133,3 +133,18 @@ for cat, v in raw["items"].items():
 html = open("index.html", encoding="utf-8").read().replace("__STACK__", json.dumps(stack, separators=(",", ":")))
 open("index.html", "w", encoding="utf-8").write(html)
 print(len(stack), "itens empilháveis")
+
+# ---- encantar: [item .n+1, item .n, runa/alma/relíquia, quantidade] ----
+upgrades = []
+for cat, v in raw["items"].items():
+    for it in as_list(v):
+        if not isinstance(it, dict) or not it.get("@uniquename"): continue
+        uid = it["@uniquename"]
+        for en in as_list((it.get("enchantments") or {}).get("enchantment")):
+            lvl = int(en["@enchantmentlevel"]); ur = (en.get("upgraderequirements") or {}).get("upgraderesource")
+            if not ur: continue
+            ur = as_list(ur)[0]; hi = f"{uid}@{lvl}"; lo = uid if lvl == 1 else f"{uid}@{lvl - 1}"
+            if hi in names_pt and lo in names_pt: upgrades.append([hi, lo, ur["@uniquename"], int(ur["@count"])])
+html = open("index.html", encoding="utf-8").read().replace("__UPGRADES__", json.dumps(upgrades, separators=(",", ":")))
+open("index.html", "w", encoding="utf-8").write(html)
+print(len(upgrades), "encantamentos")
