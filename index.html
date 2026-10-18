@@ -160,7 +160,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
 </div>
 <div class="frame wrap"><table id="tOpp"><thead><tr>
   <th data-k="name">Item</th><th data-k="route" class="trip">Rota</th><th data-k="buy">Compra</th><th data-k="sell">Venda</th>
-  <th data-k="profit">Lucro/un.</th><th data-k="vol" title="Média dos últimos 7 dias. «vende até» = 20% disso: uma quantidade que costuma vender sem baixar o preço. Confirma no jogo quantas há em cada preço.">Vendas/dia</th><th data-k="day">Lucro/dia</th><th data-k="trip" class="trip">Por viagem</th><th></th></tr></thead><tbody></tbody></table></div>
+  <th data-k="profit" title="Já com todas as taxas descontadas">Lucro/un.</th><th data-k="vol" title="Média dos últimos 7 dias. «vende até» = 20% disso: uma quantidade que costuma vender sem baixar o preço. Confirma no jogo quantas há em cada preço.">Vendas/dia</th><th data-k="day">Lucro/dia</th><th data-k="trip" class="trip">Por viagem</th><th></th></tr></thead><tbody></tbody></table></div>
 </section>
 
 <section id="pRound" class="hide">
@@ -265,7 +265,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
 
 <section id="pTrades" class="hide">
 <div class="kpis" id="kpis" style="margin-top:12px"></div>
-<details class="frame" id="feeCalc" open>
+<details class="frame" id="feeCalc">
   <summary class="gold" style="cursor:pointer;font-family:Cinzel,serif">Calculadora de taxas: vale a pena?</summary>
   <div class="bar" style="margin-top:10px">
     <label>Compra/un.<input id="fcBuy" type="number" placeholder="ex.: 10000"></label>
@@ -510,7 +510,7 @@ async function render(fetchVol = true) {
     <td class="trip">${r.from === r.to ? `<span class="city">${esc(r.from)}</span>` : `<span class="city">${esc(r.from)}</span><span class="arrow">➜</span><span class="city">${esc(cityLabel(r.to))}</span>`}</td>
     <td>${fmt(r.buy)}${sub(buyL)}</td>
     <td>${fmt(r.sell)}${sub(`${sellL(r)} · média ${fmt(r.avg)}`)}</td>
-    <td class="pos" title="${feeTip(r.buy, s.buyMode, r.sell, r.sellMode)}"><b>${fmt(r.profit)}</b>${sub(`ROI ${(r.roi * 100).toFixed(0)}% · taxas ${fmt(fees(r.buy, s.buyMode, r.sell, r.sellMode).total)}`)}${r.roi > 1 || r.buy < r.avg * 0.4 || r.sell > r.avg * 1.3 ? `<small class="warn" title="Margem muito alta: pode haver só 1 ou 2 unidades a este preço, ou o preço já mudou. Confirma no jogo antes de comprar muitas.">⚠ confirma no jogo</small>` : ""}</td>
+    <td class="pos" title="${feeTip(r.buy, s.buyMode, r.sell, r.sellMode)}"><b>${fmt(r.profit)}</b>${sub(`ROI ${(r.roi * 100).toFixed(0)}%`)}${r.roi > 1 || r.buy < r.avg * 0.4 || r.sell > r.avg * 1.3 ? `<small class="warn" title="Margem muito alta: pode haver só 1 ou 2 unidades a este preço, ou o preço já mudou. Confirma no jogo antes de comprar muitas.">⚠ confirma no jogo</small>` : ""}</td>
     <td>${fmt(r.vol)}${sub(`vende até ~${fmt(suggestQty(r.vol))}`)}</td>
     <td class="gold">${fmt(r.day)}</td>
     <td class="trip">${r.trip == null ? `<span class="mut">${r.w == null ? "sem peso" : "põe a carga"}</span>` : `<b class="gold">${fmt(r.trip)}</b>${sub(`${fmt(r.units)} un. × ${r.w.toLocaleString("pt-PT")} kg`)}`}</td>
