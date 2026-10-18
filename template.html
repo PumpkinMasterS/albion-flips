@@ -151,6 +151,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
   <div class="bar">
     <label>Prata para investir<input id="plSilver" type="number" placeholder="ex.: 2000000" style="width:150px"></label>
     <label title="A carga máxima dos stats (com montaria e bolsa) menos o que já levas. Vazio = sem viagens.">Carga livre (kg)<input id="plCap" type="number" placeholder="vazio = sem viagens" style="width:150px"></label>
+    <label title="Espaços vazios no inventário. Equipamento ocupa 1 espaço por unidade.">Espaços livres<input id="plSlots" type="number" value="40" style="width:90px"></label>
     <label>Estou em<select id="plCity"></select></label>
     <label>Zonas vermelhas<select id="plRisk"><option value="0">Evitar (sem Caerleon)</option><option value="1">Aceito o risco</option></select></label>
     <button class="btn" id="plGo">Fazer plano</button>
@@ -169,6 +170,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
     <span class="sep tripf"></span>
     <label class="tripf" title="A carga máxima dos stats (com montaria e bolsa equipadas) menos o que já levas">Carga livre (kg)<input id="cap" type="number" placeholder="ex.: 2500"></label>
     <label class="tripf">Prata a investir<input id="silver" type="number" placeholder="sem limite"></label>
+    <label class="tripf" title="Espaços vazios no inventário (e na montaria). Equipamento ocupa 1 espaço por unidade; recursos e comida empilham até 999.">Espaços livres<input id="slots" type="number" value="40" style="width:80px"></label>
     <span style="flex:1"></span>
     <label>Procurar<input id="q" placeholder="item"></label>
     <label>Ordenar<select id="sortBy"><option value="auto">Melhor primeiro</option><option value="day">Lucro/dia</option><option value="trip">Lucro/viagem</option><option value="profit">Lucro/un.</option><option value="roi">ROI</option><option value="vol">Vendas/dia</option></select></label>
@@ -195,6 +197,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
     <label>Cidade base<select id="rtHome"></select></label>
     <label>Carga livre (kg)<input id="rtCap" type="number" placeholder="ex.: 2500"></label>
     <label>Prata a investir<input id="rtSilver" type="number" placeholder="sem limite"></label>
+    <label>Espaços livres<input id="rtSlots" type="number" value="40" style="width:80px"></label>
   </div>
   <div class="hint">ⓘ Para cada par de cidades: a carga mais lucrativa para <b>ir</b> e a mais lucrativa para <b>voltar</b>, para nunca viajares vazio. Compra imediata, venda por sell order (ao Mercado Negro, imediata; volta-se de Caerleon).</div>
 </div>
@@ -363,8 +366,11 @@ let tabNow = "city";
 const sel = (el, opts) => { el.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(""); };
 const ALL = [["*", "Todas"], ...CITIES.map(c => [c, c])];
 const prefs = store.get("prefs2", {});
-const PREF_KEYS = ["prem", "age", "minVol", "maxBuy", "cap", "silver", "sortBy", "server", "qual"];
+const PREF_KEYS = ["prem", "age", "minVol", "maxBuy", "cap", "silver", "sortBy", "server", "qual", "slots"];
 const WEIGHTS = __WEIGHTS__; // kg por unidade
+const STACK = __STACK__; // máximo por espaço (sem entrada = não empilha)
+const stackOf = id => STACK[id] ?? STACK[id.split("@")[0]] ?? 1;
+const slotCap = (id, slots) => Math.max(0, slots) * stackOf(id); // quantas unidades cabem nos espaços livres
 const weightOf = id => WEIGHTS[id] ?? WEIGHTS[id.split("@")[0]] ?? null;
 for (const k of PREF_KEYS) if (prefs[k] != null) $("#" + k).value = prefs[k];
 const tabState = Object.assign({
@@ -526,7 +532,7 @@ async function render(fetchVol = true) {
     .map(r => {
       // unidades por viagem: o que cabe na carga livre, o que a prata paga e o que o mercado absorve num dia
       const w = weightOf(r.id), cap = +$("#cap").value || 0, silver = +$("#silver").value || Infinity, cost = buyCost(r.buy, s.buyMode);
-      const units = cap && w ? Math.max(0, Math.min(Math.floor(cap / w), Math.floor(silver / cost), Math.max(1, Math.round(r.vol * 0.2)), 999)) : null;
+      const units = cap && w ? Math.max(0, Math.min(Math.floor(cap / w), Math.floor(silver / cost), Math.max(1, Math.round(r.vol * 0.2)), 999, slotCap(r.id, +$("#slots").value || 40))) : null;
       return { ...r, name: nameOf(r.id), tier: tierOf(r.id), route: r.from + r.to, day: r.profit * Math.min(r.vol * (r.sellMode === "instant" ? 0.3 : 0.1), 50), w, units, trip: units == null ? null : units * r.profit };
     })
     .sort((a, b) => ((a[sortK] ?? -Infinity) > (b[sortK] ?? -Infinity) ? 1 : -1) * sortDir).slice(0, 300);
@@ -1106,7 +1112,7 @@ $("#cRrrPreset").onchange = () => { if ($("#cRrrPreset").value) { $("#cRrr").val
 // ---------- ida e volta: a melhor carga para ir e a melhor para voltar ----------
 function tripOf(r, buyMode) {
   const w = weightOf(r.id), cap = +$("#cap").value || 0, silver = +$("#silver").value || Infinity, cost = buyCost(r.buy, buyMode);
-  const units = cap && w ? Math.max(0, Math.min(Math.floor(cap / w), Math.floor(silver / cost), Math.max(1, Math.round(r.vol * 0.2)), 999)) : 0;
+  const units = cap && w ? Math.max(0, Math.min(Math.floor(cap / w), Math.floor(silver / cost), Math.max(1, Math.round(r.vol * 0.2)), 999, slotCap(r.id, +$("#slots").value || 40))) : 0;
   return { ...r, w, units, trip: units * r.profit };
 }
 let roundBusy = false;
@@ -1213,7 +1219,7 @@ function checkAlerts(rows) {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = "Albion Flips"; });
 alertsSetup();
 
-for (const [a, b] of [["rtCap", "cap"], ["rtSilver", "silver"]]) {
+for (const [a, b] of [["rtCap", "cap"], ["rtSilver", "silver"], ["rtSlots", "slots"]]) {
   $("#" + a).value = $("#" + b).value;
   $("#" + a).oninput = () => { $("#" + b).value = $("#" + a).value; savePrefs(); renderRound(); };
 }
@@ -1252,7 +1258,7 @@ $("#prem").addEventListener("change", feeCalc);
 feeCalc();
 
 // ---------- plano do dia: as melhores coisas a fazer agora, com a prata e a carga que tens ----------
-const PLAN_KEYS = ["plSilver", "plCap", "plCity", "plRisk"];
+const PLAN_KEYS = ["plSilver", "plCap", "plCity", "plRisk", "plSlots"];
 sel($("#plCity"), CITIES.filter(c => c !== "Brecilien").map(c => [c, c]));
 { const pp = store.get("plan", {}); for (const k of PLAN_KEYS) if (pp[k] != null) $("#" + k).value = pp[k]; }
 const savePlan = () => store.set("plan", Object.fromEntries(PLAN_KEYS.map(k => [k, $("#" + k).value])));
@@ -1277,7 +1283,8 @@ async function renderPlan() {
   const withV = rs => rs.map(r => ({ ...r, ...(VOL[r.key + "|" + r.to] || {}) })).filter(r => okRow(r, VOL[r.key + "|" + r.to]));
   let left = silver; const steps = [];
   // unidades por viagem: cabe na carga, a prata paga, e o mercado absorve (20% das vendas de um dia, no máximo uma pilha)
-  const trip = (r, money) => { const w = weightOf(r.id), units = w ? Math.max(0, Math.min(Math.floor(cap / w), Math.floor(money / r.buy), suggestQty(r.vol), 999)) : 0; return { ...r, w, units, trip: units * r.profit }; };
+  const slots = +$("#plSlots").value || 40;
+  const trip = (r, money) => { const w = weightOf(r.id), units = w ? Math.max(0, Math.min(Math.floor(cap / w), Math.floor(money / r.buy), suggestQty(r.vol), 999, slotCap(r.id, slots))) : 0; return { ...r, w, units, trip: units * r.profit }; };
   // 1) a melhor viagem: ida (daqui) e volta (do destino; do Mercado Negro volta-se de Caerleon)
   if (cap) {
     const trips = withV(goes).map(r => trip(r, left)).filter(r => r.trip > 0);

@@ -123,3 +123,13 @@ html = open("index.html", encoding="utf-8").read().replace("__RECIPES__", json.d
 open("index.html", "w", encoding="utf-8").write(html)
 import collections
 print(len(recipes), "receitas", dict(collections.Counter(r[1] for r in recipes)))
+
+# ---- quantos cabem num espaço do inventário: recursos/comida empilham (até 999), equipamento não (1 por espaço) ----
+stack = {}
+for cat, v in raw["items"].items():
+    for it in as_list(v):
+        if isinstance(it, dict) and it.get("@uniquename") and it.get("@maxstacksize"):
+            stack[it["@uniquename"]] = int(it["@maxstacksize"])
+html = open("index.html", encoding="utf-8").read().replace("__STACK__", json.dumps(stack, separators=(",", ":")))
+open("index.html", "w", encoding="utf-8").write(html)
+print(len(stack), "itens empilháveis")
