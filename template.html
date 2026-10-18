@@ -60,6 +60,9 @@ td.item,th:first-child{text-align:left;white-space:normal;min-width:190px}
 .kpi b{display:block;font:800 22px Cinzel,serif;margin:2px 0}
 .note{background:var(--parch);color:var(--ink);border-radius:6px;padding:10px 12px;font-size:13px;border:1px solid #b89a5e}
 .hide{display:none}
+small.warn{display:block;color:#f0b24a;font-size:11px;cursor:help}
+.qual{display:inline-block;padding:0 6px;border-radius:3px;font-size:11px;font-weight:700;border:1px solid var(--line)}
+.q2{color:#9fd36b}.q3{color:#6bb7f0}.q4{color:#c58cf0}.q5{color:#f3d58a}
 .sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
 details.more{margin-top:10px}details.more summary{cursor:pointer;color:var(--gold);font-size:13px}
 .hint{margin-top:10px;font-size:13px;color:var(--mut)}.hint b{color:var(--fg)}
@@ -90,6 +93,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
     <circle cx="32" cy="30" r="11" fill="none" stroke="url(#g)" stroke-width="3"/><path d="M32 22v16M27 26h7a3 3 0 0 1 0 6h-4a3 3 0 0 0 0 6h7" fill="none" stroke="url(#g)" stroke-width="2.5"/></svg>
   <div><h1>Albion Flips</h1><div class="sub">Mercado da Europa · dados do Albion Online Data Project, enviados por jogadores</div></div>
   <span style="flex:1"></span>
+  <label>Servidor<select id="server"><option value="europe">Europa</option><option value="west">América</option><option value="east">Ásia</option></select></label>
   <label>Premium<select id="prem"><option value="1">Sim · taxa 4%</option><option value="0">Não · taxa 8%</option></select></label>
   <button class="btn" id="nav" title="Abre o orientador por cima do jogo">🧭 Navegador</button>
   <button class="btn" id="go">Atualizar mercado</button>
@@ -125,6 +129,7 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
       <label>Dados com menos de (h)<input id="age" type="number" value="6" min="1"></label>
       <label>Vendas/dia mín.<input id="minVol" type="number" value="5" min="0"></label>
       <label>Preço máx./un.<input id="maxBuy" type="number" placeholder="sem limite"></label>
+      <label>Qualidade<select id="qual"><option value="all">Todas</option><option value="1">Só Normal</option><option value="2">Bom ou melhor</option><option value="4">Excelente ou melhor</option></select></label>
     </div>
   </details>
   <div id="hint" class="hint"></div>
@@ -197,13 +202,16 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
   <h2>Registar compra</h2>
   <div class="bar">
     <label>Item (nome ou ID)<input id="tItem" list="dl" style="width:280px"></label>
+    <label>Qualidade<select id="tQual"><option value="1">Normal</option><option value="2">Bom</option><option value="3">Notável</option><option value="4">Excelente</option><option value="5">Obra-prima</option></select></label>
     <label>Quantidade<input id="tQty" type="number" value="1" min="1"></label>
     <label>Preço compra/un.<input id="tBuy" type="number"></label>
     <label>Comprado em<select id="tCity"></select></label>
     <label>Vender em<select id="tSellCity"></select></label>
     <button class="btn" id="tAdd">Adicionar</button>
     <span style="flex:1"></span>
+    <button class="btn2" id="autoBk" title="Escolhe um ficheiro no PC: cada troca nova fica lá gravada sozinha">💾 Cópia automática</button>
     <button class="btn2" id="exp">Exportar</button><button class="btn2" id="imp">Importar</button>
+    <span id="bkStatus" class="sub" style="width:100%;text-align:right"></span>
   </div>
   <datalist id="dl"></datalist>
 </div>
@@ -214,7 +222,8 @@ td.acts{display:flex;flex-direction:column;gap:4px;align-items:stretch}td.acts .
 
 <script>
 const NAMES = __NAMES__;
-const HOST = "https://europe.albion-online-data.com";
+const SERVERS = { europe: "Europa", west: "América", east: "Ásia" };
+let HOST = "https://europe.albion-online-data.com";
 const CITIES = ["Thetford", "Bridgewatch", "Caerleon", "Fort Sterling", "Lymhurst", "Martlock", "Brecilien"];
 const BM = "Black Market";
 const SETUP = 0.025;
@@ -223,7 +232,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 const fmt = n => n == null || !isFinite(n) ? "—" : Math.round(n).toLocaleString("pt-PT");
 const tierOf = id => { const t = id.match(/^T(\d)/), e = id.match(/@(\d)/); return t ? t[1] + "." + (e ? e[1] : "0") : "—"; };
 const nameOf = id => NAMES[id] || id;
-const icon = id => `https://render.albiononline.com/v1/item/${encodeURIComponent(id)}.png?size=40&quality=1`;
+const icon = (id, q = 1) => `https://render.albiononline.com/v1/item/${encodeURIComponent(id)}.png?size=40&quality=${q}`;
+const QUAL = { 1: "Normal", 2: "Bom", 3: "Notável", 4: "Excelente", 5: "Obra-prima" };
 const cityLabel = c => c === BM ? "Mercado Negro" : c;
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
@@ -239,7 +249,7 @@ let tabNow = "city";
 const sel = (el, opts) => { el.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(""); };
 const ALL = [["*", "Todas"], ...CITIES.map(c => [c, c])];
 const prefs = store.get("prefs2", {});
-const PREF_KEYS = ["prem", "age", "minVol", "maxBuy", "cap", "silver", "sortBy"];
+const PREF_KEYS = ["prem", "age", "minVol", "maxBuy", "cap", "silver", "sortBy", "server", "qual"];
 const WEIGHTS = __WEIGHTS__; // kg por unidade
 const weightOf = id => WEIGHTS[id] ?? WEIGHTS[id.split("@")[0]] ?? null;
 for (const k of PREF_KEYS) if (prefs[k] != null) $("#" + k).value = prefs[k];
@@ -248,6 +258,9 @@ const tabState = Object.assign({
   trans: { from: "*", to: "*", buyMode: "instant", sellMode: "order" },
   bm:    { from: "*", buyMode: "instant" },
 }, prefs.tabs || {});
+const setHost = () => { HOST = `https://${$("#server").value}.albion-online-data.com`; };
+setHost();
+$("#server").onchange = () => { setHost(); savePrefs(); P = {}; VOL = {}; loadedAt = 0; render(); $("#status").textContent = `Servidor: ${SERVERS[$("#server").value]}. Carrega em «Atualizar mercado».`; };
 const savePrefs = () => store.set("prefs2", { ...Object.fromEntries(PREF_KEYS.map(k => [k, $("#" + k).value])), tabs: tabState });
 
 const HINTS = {
@@ -297,8 +310,8 @@ async function getJSON(url) {
   }
   return [];
 }
-let P = {};          // P[id][loc] = {s, sd, b, bd}
-let VOL = {};        // VOL[id|loc] = {vol, avg} | null
+let P = {};          // P["id#qualidade"][loc] = {s, sd, b, bd}  (equipamento tem 5 qualidades, cada uma é um mercado)
+let VOL = {};        // VOL["id#q|loc"] = {vol, avg, pts} | null
 let loadedAt = 0;
 $("#go").onclick = async () => {
   $("#go").disabled = true; savePrefs();
@@ -306,9 +319,9 @@ $("#go").onclick = async () => {
     const locs = [...CITIES, BM].map(encodeURIComponent).join(","), bs = batches(Object.keys(NAMES)), np = {};
     for (let i = 0; i < bs.length; i++) {
       $("#status").textContent = `A ler preços de todas as cidades… ${i + 1}/${bs.length}`; setProg((i + 1) / bs.length * 0.85);
-      for (const d of await getJSON(`${HOST}/api/v2/stats/prices/${bs[i].join(",")}?locations=${locs}&qualities=1`)) {
+      for (const d of await getJSON(`${HOST}/api/v2/stats/prices/${bs[i].join(",")}?locations=${locs}`)) {
         if (!d.sell_price_min && !d.buy_price_max) continue;
-        (np[d.item_id] ||= {})[d.city] = { s: d.sell_price_min, sd: d.sell_price_min_date, b: d.buy_price_max, bd: d.buy_price_max_date };
+        (np[d.item_id + "#" + (d.quality || 1)] ||= {})[d.city] = { s: d.sell_price_min, sd: d.sell_price_min_date, b: d.buy_price_max, bd: d.buy_price_max_date };
       }
       await sleep(300);
     }
@@ -323,9 +336,10 @@ function candidates() {
   const froms = s.from === "*" ? CITIES : [s.from];
   const tos = tabNow === "city" ? null : tabNow === "bm" ? [BM] : (s.to === "*" ? CITIES : [s.to]);
   const buyMode = s.buyMode, sellMode = tabNow === "city" ? "order" : tabNow === "bm" ? "instant" : s.sellMode;
-  const out = [];
-  for (const id in P) {
-    const L = P[id];
+  const out = [], qmin = $("#qual").value === "all" ? 1 : +$("#qual").value, qmax = $("#qual").value === "1" ? 1 : 5;
+  for (const key in P) {
+    const L = P[key], [id, qs] = key.split("#"), q = +qs;
+    if (q < qmin || q > qmax) continue;
     for (const f of froms) {
       const o = L[f]; if (!o) continue;
       const bp = buyMode === "order" ? (o.b && ageH(o.bd) <= maxAge ? o.b + 1 : 0) : (o.s && ageH(o.sd) <= maxAge ? o.s : 0);
@@ -338,25 +352,25 @@ function candidates() {
         if (!sp) continue;
         const cost = buyCost(bp, buyMode), profit = sellNet(sp, sellMode) - cost;
         if (profit <= 0 || profit / cost >= 3) continue;
-        out.push({ id, from: f, to: t, buy: bp, sell: sp, sellMode, profit, roi: profit / cost, ageH: Math.max(bAge, ageH(sellMode === "order" ? d.sd : d.bd)) });
+        out.push({ id, q, key, from: f, to: t, buy: bp, sell: sp, sellMode, profit, roi: profit / cost, ageH: Math.max(bAge, ageH(sellMode === "order" ? d.sd : d.bd)) });
       }
     }
   }
   return out;
 }
 async function loadVolumes(rows) {
-  const need = {};
-  for (const r of rows) { const k = r.id + "|" + r.to; if (!(k in VOL)) (need[r.to] ||= new Set()).add(r.id); }
-  const jobs = Object.entries(need).flatMap(([loc, ids]) => batches([...ids]).map(b => [loc, b]));
+  const need = {}; // "loc|q" -> Set(id)
+  for (const r of rows) { if (!((r.key + "|" + r.to) in VOL)) (need[r.to + "|" + r.q] ||= new Set()).add(r.id); }
+  const jobs = Object.entries(need).flatMap(([lq, ids]) => batches([...ids]).map(b => [lq, b]));
   for (let i = 0; i < jobs.length; i++) {
-    const [loc, b] = jobs[i];
-    $("#status").textContent = `A ler volume de vendas… ${i + 1}/${jobs.length}`; setProg(0.85 + (i + 1) / jobs.length * 0.15);
-    for (const id of b) VOL[id + "|" + loc] = null;
-    for (const h of await getJSON(`${HOST}/api/v2/stats/history/${b.join(",")}?locations=${encodeURIComponent(loc)}&qualities=1&time-scale=24`)) {
+    const [lq, b] = jobs[i], [loc, q] = lq.split("|");
+    $("#status").textContent = `A ler vendas por dia… ${i + 1}/${jobs.length}`; setProg((i + 1) / jobs.length);
+    for (const id of b) VOL[id + "#" + q + "|" + loc] = null;
+    for (const h of await getJSON(`${HOST}/api/v2/stats/history/${b.join(",")}?locations=${encodeURIComponent(loc)}&qualities=${q}&time-scale=24`)) {
       const pts = h.data.filter(p => ageH(p.timestamp) <= 168), n = pts.reduce((a, p) => a + p.item_count, 0);
-      if (n) VOL[h.item_id + "|" + loc] = { vol: n / 7, avg: pts.reduce((a, p) => a + p.avg_price * p.item_count, 0) / n };
+      if (n) VOL[h.item_id + "#" + q + "|" + loc] = { vol: n / 7, avg: pts.reduce((a, p) => a + p.avg_price * p.item_count, 0) / n, pts: pts.map(p => [p.timestamp, p.avg_price, p.item_count]) };
     }
-    await sleep(300);
+    await sleep(250);
   }
 }
 let sortK = "day", sortDir = -1, rendering = false;
@@ -371,14 +385,15 @@ async function render(fetchVol = true) {
   const s = tabState[tabNow];
   let rows = candidates().filter(r => r.buy <= maxBuy && (!q || nameOf(r.id).toLowerCase().includes(q) || r.id.toLowerCase().includes(q)));
   if (fetchVol && !rendering) {
-    const top = new Set([...rows].sort((a, b) => b.profit - a.profit).slice(0, 250).concat([...rows].sort((a, b) => b.roi - a.roi).slice(0, 150)));
-    if ([...top].some(r => !((r.id + "|" + r.to) in VOL))) {
+    // todas as oportunidades (até 6000, as de mais lucro primeiro): itens baratos com muito volume também contam
+    const top = [...rows].sort((a, b) => b.profit - a.profit).slice(0, 6000);
+    if (top.some(r => !((r.key + "|" + r.to) in VOL))) {
       rendering = true;
-      try { await loadVolumes([...top]); } finally { rendering = false; }
+      try { await loadVolumes(top); } finally { rendering = false; setProg(0); }
       return render(false);
     }
   }
-  rows = rows.map(r => ({ ...r, ...(VOL[r.id + "|" + r.to] || {}) }))
+  rows = rows.map(r => ({ ...r, ...(VOL[r.key + "|" + r.to] || {}) }))
     .filter(r => r.vol != null && r.vol >= minVol && (r.sellMode === "instant" || r.sell <= r.avg * 1.2))
     .map(r => {
       // unidades por viagem: o que cabe na carga livre, o que a prata paga e o que o mercado absorve num dia
@@ -391,15 +406,15 @@ async function render(fetchVol = true) {
   const buyL = s.buyMode === "order" ? "buy order" : "imediata", sellL = r => r.sellMode === "order" ? "sell order" : "imediata";
   const sub = t => `<small class="mut" style="display:block">${t}</small>`;
   $("#tOpp tbody").innerHTML = rows.map(r => `<tr>
-    <td class="item"><div class="it"><img loading="lazy" src="${icon(r.id)}" alt=""><div>${esc(r.name)} <span class="tier t${r.tier[0]}">${r.tier}</span><small title="${esc(r.id)}">dados de há ${r.ageH.toFixed(1)} h</small></div></div></td>
+    <td class="item"><div class="it"><img loading="lazy" src="${icon(r.id, r.q)}" alt=""><div>${esc(r.name)} <span class="tier t${r.tier[0]}">${r.tier}</span>${r.q > 1 ? ` <span class="qual q${r.q}">${QUAL[r.q]}</span>` : ""}<small title="${esc(r.id)}">dados de há ${r.ageH.toFixed(1)} h</small></div></div></td>
     <td class="trip">${r.from === r.to ? `<span class="city">${esc(r.from)}</span>` : `<span class="city">${esc(r.from)}</span><span class="arrow">➜</span><span class="city">${esc(cityLabel(r.to))}</span>`}</td>
     <td>${fmt(r.buy)}${sub(buyL)}</td>
     <td>${fmt(r.sell)}${sub(`${sellL(r)} · média ${fmt(r.avg)}`)}</td>
-    <td class="pos"><b>${fmt(r.profit)}</b>${sub(`ROI ${(r.roi * 100).toFixed(0)}%`)}</td>
+    <td class="pos"><b>${fmt(r.profit)}</b>${sub(`ROI ${(r.roi * 100).toFixed(0)}%`)}${r.roi > 1 || r.buy < r.avg * 0.4 || r.sell > r.avg * 1.3 ? `<small class="warn" title="Margem muito alta: pode haver só 1 ou 2 unidades a este preço, ou o preço já mudou. Confirma no jogo antes de comprar muitas.">⚠ confirma no jogo</small>` : ""}</td>
     <td>${fmt(r.vol)}</td>
     <td class="gold">${fmt(r.day)}</td>
     <td class="trip">${r.trip == null ? `<span class="mut">${r.w == null ? "sem peso" : "põe a carga"}</span>` : `<b class="gold">${fmt(r.trip)}</b>${sub(`${fmt(r.units)} un. × ${r.w.toLocaleString("pt-PT")} kg`)}`}</td>
-    <td class="acts"><button class="btn2" data-buy="${esc(r.id)}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button>
+    <td class="acts"><button class="btn2" data-buy="${esc(r.id)}" data-q="${r.q}" data-p="${r.buy}" data-from="${esc(r.from)}" data-to="${esc(r.to)}">Comprei</button>
       ${r.from !== r.to && r.from !== "Brecilien" && r.to !== "Brecilien" ? `<button class="btn2" data-route-from="${esc(r.from)}" data-route-to="${esc(r.to === BM ? "Caerleon" : r.to)}">Rota</button>` : ""}</td></tr>`).join("")
     || `<tr><td colspan="9" class="mut" style="text-align:center;padding:30px">Nada com lucro com estes filtros.</td></tr>`;
   $("#status").textContent = `${rows.length} oportunidades · mercado lido às ${new Date(loadedAt).toLocaleTimeString("pt-PT")}`;
@@ -410,45 +425,69 @@ $("#tOpp").onclick = e => {
   if (rb) { $("#rFrom").value = rb.dataset.routeFrom; $("#rTo").value = rb.dataset.routeTo; routeStep = 0; saveRoute(); document.querySelector('.tabs button[data-tab="route"]').click(); return; }
   const b = e.target.closest("button[data-buy]"); if (!b) return;
   document.querySelector('.tabs button[data-tab="trades"]').click();
-  $("#tItem").value = b.dataset.buy; $("#tBuy").value = b.dataset.p; $("#tCity").value = b.dataset.from; $("#tSellCity").value = b.dataset.to; $("#tQty").focus();
+  $("#tItem").value = b.dataset.buy; $("#tQual").value = b.dataset.q || "1"; $("#tBuy").value = b.dataset.p; $("#tCity").value = b.dataset.from; $("#tSellCity").value = b.dataset.to; $("#tQty").focus();
 };
 
 // ---------- as minhas trocas ----------
 let trades = store.get("trades", []).map(t => ({ sellCity: t.city, ...t })), market = {};
-const saveTrades = () => store.set("trades", trades);
+// cópia automática: o browser guarda as trocas, mas limpar o histórico apaga-as; por isso gravamos também num ficheiro
+const idb = (mode, fn) => new Promise((ok, ko) => { const r = indexedDB.open("albion-flips", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv");
+  r.onsuccess = () => { const tx = r.result.transaction("kv", mode), q = fn(tx.objectStore("kv")); tx.oncomplete = () => ok(q && q.result); tx.onerror = () => ko(tx.error); }; r.onerror = () => ko(r.error); });
+let bkHandle = null;
+async function backupNow(ask = false) {
+  if (!bkHandle) return;
+  try {
+    let perm = await bkHandle.queryPermission({ mode: "readwrite" });
+    if (perm !== "granted" && ask) perm = await bkHandle.requestPermission({ mode: "readwrite" });
+    if (perm !== "granted") { $("#bkStatus").innerHTML = `Cópia automática em pausa: carrega em «💾 Cópia automática» para a retomar.`; return; }
+    const w = await bkHandle.createWritable(); await w.write(JSON.stringify(trades, null, 1)); await w.close();
+    $("#bkStatus").textContent = `Cópia automática: ${bkHandle.name} · ${new Date().toLocaleTimeString("pt-PT")}`;
+  } catch (e) { $("#bkStatus").textContent = "Cópia automática falhou: " + e.message; }
+}
+const saveTrades = () => { store.set("trades", trades); backupNow(); };
+$("#autoBk").onclick = async () => {
+  if (!window.showSaveFilePicker) return alert("O teu browser não permite gravar ficheiros automaticamente. Usa «Exportar» de vez em quando.");
+  try {
+    if (!bkHandle) { bkHandle = await showSaveFilePicker({ suggestedName: "albion-trocas.json", types: [{ description: "JSON", accept: { "application/json": [".json"] } }] }); await idb("readwrite", st => st.put(bkHandle, "bk")); }
+    await backupNow(true);
+  } catch (e) { if (e.name !== "AbortError") alert("Não foi possível: " + e.message); }
+};
+idb("readonly", st => st.get("bk")).then(h => { if (h) { bkHandle = h; $("#bkStatus").textContent = `Cópia automática: ${h.name}`; } }).catch(() => {});
 sel($("#tCity"), CITIES.map(c => [c, c])); sel($("#tSellCity"), [...CITIES, BM].map(c => [c, cityLabel(c)]));
 $("#dl").innerHTML = Object.entries(NAMES).map(([id, n]) => `<option value="${esc(id)}">${esc(n)} (${tierOf(id)})</option>`).join("");
 function resolveId(v) { v = v.trim(); if (NAMES[v]) return v; const hit = Object.entries(NAMES).find(([, n]) => n.toLowerCase() === v.toLowerCase()); return hit ? hit[0] : null; }
 $("#tAdd").onclick = () => {
   const id = resolveId($("#tItem").value), qty = +$("#tQty").value, buy = +$("#tBuy").value;
   if (!id || !qty || !buy) return alert("Escolhe um item da lista e preenche quantidade e preço.");
-  trades.unshift({ id, qty, buy, city: $("#tCity").value, sellCity: $("#tSellCity").value, at: Date.now(), sell: null });
+  trades.unshift({ id, q: +$("#tQual").value, qty, buy, city: $("#tCity").value, sellCity: $("#tSellCity").value, at: Date.now(), sell: null });
   saveTrades(); $("#tItem").value = ""; $("#tBuy").value = ""; renderTrades(); refreshMarket();
 };
 $("#tTrades").onclick = e => {
   const act = e.target.dataset.act, i = +e.target.dataset.i; if (!act) return;
-  if (act === "sold") { const v = prompt("Preço de venda por unidade?", market[trades[i].id + "|" + trades[i].sellCity] || ""); if (v) trades[i].sell = +v; }
+  if (act === "sold") { const v = prompt("Preço de venda por unidade?", market[tkey(trades[i]) + "|" + trades[i].sellCity] || ""); if (v) trades[i].sell = +v; }
   if (act === "del" && confirm("Apagar esta troca?")) trades.splice(i, 1);
   saveTrades(); renderTrades();
 };
-const marketPrice = t => t.sellCity === BM ? (P[t.id]?.[BM]?.b) : (P[t.id]?.[t.sellCity]?.s ? P[t.id][t.sellCity].s - 1 : null);
+const tkey = t => t.id + "#" + (t.q || 1);
+const marketPrice = t => { const L = P[tkey(t)] || {}; return t.sellCity === BM ? L[BM]?.b : L[t.sellCity]?.s ? L[t.sellCity].s - 1 : null; };
 async function refreshMarket() {
-  const open = trades.filter(t => t.sell == null);
-  for (const loc of new Set(open.map(t => t.sellCity))) {
-    const ids = [...new Set(open.filter(t => t.sellCity === loc).map(t => t.id))];
-    for (const d of await getJSON(`${HOST}/api/v2/stats/prices/${ids.join(",")}?locations=${encodeURIComponent(loc)}&qualities=1`))
-      ((P[d.item_id] ||= {})[loc] = { s: d.sell_price_min, sd: d.sell_price_min_date, b: d.buy_price_max, bd: d.buy_price_max_date });
+  const open = trades.filter(t => t.sell == null), groups = {};
+  for (const t of open) (groups[t.sellCity + "|" + (t.q || 1)] ||= new Set()).add(t.id);
+  for (const [lq, ids] of Object.entries(groups)) {
+    const [loc, q] = lq.split("|");
+    for (const d of await getJSON(`${HOST}/api/v2/stats/prices/${[...ids].join(",")}?locations=${encodeURIComponent(loc)}&qualities=${q}`))
+      ((P[d.item_id + "#" + q] ||= {})[loc] = { s: d.sell_price_min, sd: d.sell_price_min_date, b: d.buy_price_max, bd: d.buy_price_max_date });
   }
-  for (const t of open) market[t.id + "|" + t.sellCity] = marketPrice(t);
+  for (const t of open) market[tkey(t) + "|" + t.sellCity] = marketPrice(t);
   renderTrades();
 }
 function renderTrades() {
   let done = 0, openCost = 0, openVal = 0, n = 0;
   const net = (t, sp) => sellNet(sp, t.sellCity === BM ? "instant" : "order") * t.qty - t.buy * t.qty;
   $("#tTrades tbody").innerHTML = trades.map((t, i) => {
-    const m = market[t.id + "|" + t.sellCity], sold = t.sell != null, p = sold ? net(t, t.sell) : m ? net(t, m) : null;
+    const m = market[tkey(t) + "|" + t.sellCity], sold = t.sell != null, p = sold ? net(t, t.sell) : m ? net(t, m) : null;
     if (sold) { done += p; n++; } else { openCost += t.buy * t.qty; if (p != null) openVal += p; }
-    return `<tr><td class="item"><div class="it"><img loading="lazy" src="${icon(t.id)}" alt=""><div>${esc(nameOf(t.id))}<small>${tierOf(t.id)}</small></div></div></td>
+    return `<tr><td class="item"><div class="it"><img loading="lazy" src="${icon(t.id, t.q || 1)}" alt=""><div>${esc(nameOf(t.id))}<small>${tierOf(t.id)}${(t.q || 1) > 1 ? " · " + QUAL[t.q] : ""}</small></div></div></td>
       <td>${new Date(t.at).toLocaleDateString("pt-PT")}</td>
       <td><span class="city">${esc(t.city)}</span>${t.sellCity !== t.city ? `<span class="arrow">➜</span><span class="city">${esc(cityLabel(t.sellCity))}</span>` : ""}</td>
       <td>${t.qty}</td><td>${fmt(t.buy)}</td><td>${fmt(m)}</td><td>${sold ? fmt(t.sell) : "—"}</td>
